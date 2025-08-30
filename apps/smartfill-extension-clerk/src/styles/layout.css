@@ -1,0 +1,85 @@
+/* Layout and container styles */
+.container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 1;
+}
+
+/* Page Content */
+.page-content {
+  flex: 1;
+  padding: var(--space-lg) var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  background: var(--bg);
+}
+
+.page-content.hidden {
+  display: none;
+}
+
+/* Actions Row */
+.actions-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+}
+
+/* Export/Import Buttons Layout */
+.export-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+}
+
+/* Import Section Layout */
+.import-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+/* Import Options */
+.import-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--border-light);
+}
+
+/* Loading State */
+.loading {
+  position: relative;
+  overflow: hidden;
+}
+
+.loading::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  animation: shimmer 1.5s infinite;
+}
+
+/* Focus States */
+.primary-btn:focus-visible,
+.secondary-btn:focus-visible,
+.settings-btn:focus-visible,
+.page-toggle-btn:focus-visible,
+.back-btn:focus-visible,
+.save-btn:focus-visible,
+.export-btn:focus-visible,
+.import-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}

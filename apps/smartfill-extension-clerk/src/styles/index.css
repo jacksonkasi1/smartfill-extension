@@ -1,0 +1,26 @@
+/* Main CSS Index - SmartFill Extension
+ * This file imports all CSS modules in the correct order
+ * Maintain this order to ensure proper CSS cascade
+ */
+
+/* 1. Design tokens and variables - Must be first */
+@import './variables.css';
+
+/* 2. Base styles and reset */
+@import './base.css';
+
+/* 3. Layout and container styles */
+@import './layout.css';
+
+/* 4. Component styles */
+@import './header.css';
+@import './settings.css';
+@import './auth.css';
+@import './buttons.css';
+@import './forms.css';
+@import './status.css';
+@import './recording.css';
+@import './sessions.css';
+
+/* 5. Animations - Load last to ensure they can override component styles */
+@import './animations.css';

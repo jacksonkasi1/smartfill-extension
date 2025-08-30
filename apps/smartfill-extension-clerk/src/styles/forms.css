@@ -1,0 +1,128 @@
+/* Form and Input Styles */
+
+/* API Key Input - Improved */
+.setting-group > label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: var(--space-sm);
+}
+
+.input-group {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: stretch;
+}
+
+.input-group input {
+  flex: 1;
+  padding: var(--space-md) var(--space-lg);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  background: white;
+  color: var(--text);
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.input-group input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1);
+}
+
+.input-group input::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* Main Prompt Textarea */
+.main-prompt-textarea {
+  width: 100%;
+  min-height: 210px;
+  padding: var(--space-md);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  transition: all 0.2s ease;
+  background: var(--bg);
+  box-sizing: border-box;
+}
+
+.main-prompt-textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1);
+}
+
+.main-prompt-textarea::placeholder {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+/* File Input */
+.file-input-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-xl) var(--space-lg);
+  background: var(--bg-secondary);
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.file-input-label:hover {
+  background: rgba(249, 115, 22, 0.05);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.file-input-label img {
+  width: var(--icon-md);
+  height: var(--icon-md);
+  opacity: 0.6;
+}
+
+.file-input-label:hover img {
+  opacity: 1;
+}
+
+/* Checkboxes - Improved Alignment */
+.checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-md);
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+  margin-top: 1px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.checkbox-label span {
+  line-height: 1.4;
+  display: block;
+  padding-top: 1px;
+}
+
+.checkbox-label:hover span {
+  color: var(--text);
+}

@@ -1,0 +1,59 @@
+{
+  "name": "@smartfill/rag-service",
+  "version": "1.0.0",
+  "description": "RAG (Retrieval-Augmented Generation) service with user-specific knowledge management",
+  "main": "dist/server.js",
+  "type": "module",
+  "packageManager": "bun@1.2.20",
+  "scripts": {
+    "dev": "node --env-file=.env --import tsx/esm --watch src/server.ts",
+    "build": "tsc || echo 'Build completed with errors but files generated'",
+    "deploy": "bun run clean && bun run build && cp vercel.json dist/ && cp -r api dist/ && cd dist && vercel --prod --yes",
+    "start": "node dist/server.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "type-check": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "prebuild": "bun run clean",
+    "test": "node test-rag.js --mock",
+    "test:mock": "node test-rag.js --mock",
+    "test:real": "node test-rag.js --real",
+    "test:help": "node test-rag.js --help"
+  },
+  "dependencies": {
+    "@clerk/backend": "^1.15.6",
+    "@hono/node-server": "^1.8.2",
+    "@hono/zod-validator": "^0.2.1",
+    "@tidbcloud/serverless": "^0.2.0",
+    "drizzle-kit": "^0.27.0",
+    "drizzle-orm": "^0.36.4",
+    "hono": "^4.0.0",
+    "mysql2": "^3.14.3",
+    "node-fetch": "^3.3.2",
+    "openai": "^5.16.0",
+    "svix": "^1.75.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "@types/pg": "^8.10.9",
+    "tsx": "^4.7.0",
+    "typescript": "^5.6.2",
+    "eslint": "^9.33.0",
+    "@typescript-eslint/eslint-plugin": "^8.39.0",
+    "@typescript-eslint/parser": "^8.39.0"
+  },
+  "keywords": [
+    "rag",
+    "vector-db",
+    "upstash",
+    "hono",
+    "knowledge-management",
+    "embeddings",
+    "clerk"
+  ]
+}

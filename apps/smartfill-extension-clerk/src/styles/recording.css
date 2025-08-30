@@ -1,0 +1,39 @@
+/* Recording Section */
+.recording-section {
+  margin-bottom: var(--space-xl);
+}
+
+.recording-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+  padding: var(--space-md);
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  animation: pulse 2s infinite;
+}
+
+.status-dot.recording {
+  background: #ef4444;
+  animation: recordingPulse 1s infinite;
+}
+
+.status-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.recording-buttons {
+  display: flex;
+  gap: var(--space-sm);
+}

@@ -1,0 +1,13 @@
+name: rag-service
+runtime: nodejs20
+build:
+  commands:
+    - npm install -g pnpm
+    - pnpm install --frozen-lockfile
+    - pnpm --filter @smartfill/rag-service build
+start:
+  command: node apps/rag-service/dist/server.js
+  port: 8080
+env:
+  NODE_ENV: production
+  PORT: 8080

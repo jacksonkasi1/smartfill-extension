@@ -1,0 +1,262 @@
+/* Button Styles */
+
+/* Primary Button */
+.primary-btn {
+  width: 100%;
+  background: var(--primary);
+  color: white;
+  border: none;
+  padding: var(--space-lg) var(--space-xl);
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  box-shadow: 0 4px 14px rgba(249, 115, 22, 0.25);
+}
+
+.primary-btn:hover:not(:disabled) {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(249, 115, 22, 0.35);
+}
+
+.primary-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.primary-btn:disabled {
+  opacity: 0.8;
+  cursor: not-allowed;
+  transform: none;
+  background: var(--primary);
+}
+
+.primary-btn.loading {
+  pointer-events: none;
+}
+
+/* Secondary Button */
+.secondary-btn {
+  background: white;
+  color: var(--text);
+  border: 1.5px solid var(--border);
+  padding: var(--space-lg);
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.secondary-btn:hover {
+  background: var(--bg-secondary);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.secondary-btn:active {
+  transform: scale(0.98);
+}
+
+.secondary-btn svg {
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+  stroke-width: 1.5;
+}
+
+/* Save Button */
+.save-btn {
+  background: var(--primary);
+  color: white;
+  border: none;
+  padding: var(--space-md) var(--space-xl);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.save-btn:hover {
+  background: var(--primary-hover);
+  box-shadow: var(--shadow-sm);
+}
+
+.save-btn:active {
+  transform: scale(0.98);
+}
+
+/* Export/Import Buttons */
+.export-btn, .import-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  background: white;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.export-btn:hover, .import-btn:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: rgba(249, 115, 22, 0.05);
+}
+
+.export-btn:active, .import-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.export-btn img, .import-btn img {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  opacity: 0.7;
+}
+
+.export-btn:hover img, .import-btn:hover:not(:disabled) img {
+  opacity: 1;
+}
+
+.import-btn {
+  background: var(--primary);
+  color: white;
+  border: none;
+}
+
+.import-btn:hover:not(:disabled) {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+}
+
+.import-btn:disabled {
+  background: var(--border);
+  border-color: var(--border);
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+}
+
+/* Small Action Buttons */
+.refresh-btn {
+  width: 28px;
+  height: 28px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.refresh-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: rgba(249, 115, 22, 0.05);
+}
+
+.refresh-btn svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  stroke-width: 2;
+}
+
+.play-btn, .export-session-btn, .delete-btn {
+  width: 28px;
+  height: 28px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.play-btn:hover {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.export-session-btn:hover {
+  background: #10b981;
+  color: white;
+  border-color: #10b981;
+}
+
+.delete-btn:hover {
+  background: #ef4444;
+  color: white;
+  border-color: #ef4444;
+}
+
+.play-btn svg, .export-session-btn svg, .delete-btn svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+/* Recording Buttons */
+.record-btn, .stop-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.record-btn {
+  background: #ef4444;
+  color: white;
+}
+
+.record-btn:hover {
+  background: #dc2626;
+}
+
+.record-btn:disabled {
+  background: var(--border);
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+}
+
+.stop-btn {
+  background: var(--text-secondary);
+  color: white;
+}
+
+.stop-btn:hover {
+  background: var(--text);
+}
+
+.record-btn svg, .stop-btn svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}

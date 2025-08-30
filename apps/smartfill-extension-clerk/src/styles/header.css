@@ -1,0 +1,89 @@
+/* Header Improvements */
+.header {
+  background: var(--bg);
+  padding: var(--space-lg) var(--space-xl);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  border-bottom: 1px solid var(--border);
+  min-height: 68px;
+}
+
+.header-left-buttons {
+  display: flex;
+  gap: var(--space-sm);
+  z-index: 10;
+}
+
+.header-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  z-index: 10;
+}
+
+.settings-btn, .page-toggle-btn {
+  width: 36px;
+  height: 36px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.settings-btn:hover, .page-toggle-btn:hover {
+  background: white;
+  color: var(--text);
+  border-color: var(--primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.settings-btn:hover {
+  transform: rotate(90deg);
+}
+
+.page-toggle-btn:hover {
+  transform: scale(1.05);
+}
+
+.settings-btn:active, .page-toggle-btn:active {
+  background: var(--primary);
+  color: white;
+}
+
+.settings-btn svg, .page-toggle-btn svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logo img {
+  width: 40px;
+  height: 40px;
+}
+
+.header h1 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.025em;
+  margin: 0;
+}
