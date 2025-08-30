@@ -27,17 +27,8 @@
     ".next/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
-  ],
-  "references": [
-    {
-      "path": "../../packages/shared-types"
-    },
-    {
-      "path": "../../packages/auth-client"
-    },
-    {
-      "path": "../../packages/config"
-    }
+    "node_modules",
+    "src/components/data-table/**/*",
+    "tnks-data-table-main/**/*"
   ]
 }

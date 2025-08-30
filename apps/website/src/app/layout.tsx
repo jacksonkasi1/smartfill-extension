@@ -6,6 +6,8 @@ import { ClerkProvider } from '@clerk/nextjs'
 
 // ** import components
 import { ThemeProvider } from '@/contexts/ThemeContext'
+import { QueryProvider } from '@/components/providers/query-provider'
+import { Toaster } from '@/components/ui/sonner'
 
 // ** import styles
 import './globals.css'
@@ -95,9 +97,12 @@ export default function RootLayout({
           />
         </head>
         <body>
-          <ThemeProvider>
-            {children}
-          </ThemeProvider>
+          <QueryProvider>
+            <ThemeProvider>
+              {children}
+              <Toaster />
+            </ThemeProvider>
+          </QueryProvider>
         </body>
       </html>
     </ClerkProvider>

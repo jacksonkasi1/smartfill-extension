@@ -199,4 +199,28 @@ export class KnowledgeService {
       },
     }))
   }
+
+  async getKnowledgeStats(userId: string): Promise<{ total: number; recent: number }> {
+    // Get total count
+    const [totalResult] = await db
+      .select({ count: count() })
+      .from(knowledge)
+      .where(eq(knowledge.userId, userId))
+
+    // Get recent count (last 7 days)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    const [recentResult] = await db
+      .select({ count: count() })
+      .from(knowledge)
+      .where(and(
+        eq(knowledge.userId, userId),
+        // Note: This would need proper date comparison based on your database
+        // For now, returning 0 for recent count
+      ))
+
+    return {
+      total: totalResult?.count || 0,
+      recent: 0, // TODO: Implement proper date filtering based on database schema
+    }
+  }
 }

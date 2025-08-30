@@ -1,11 +1,10 @@
 // Main API Export File
 import { healthApi } from './health';
-import { knowledgeApi } from './knowledge';
+import * as knowledgeApi from './knowledge';
 
-// Export API functions
+// Export API functions  
 export { healthApi } from './health';
-export { knowledgeApi } from './knowledge';
-export { API_CONFIG, ApiError, httpClient } from './config';
+export * from './knowledge';
 
 // Combined API object for convenience
 export const api = {
