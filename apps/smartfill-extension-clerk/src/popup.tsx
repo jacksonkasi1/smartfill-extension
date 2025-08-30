@@ -39,22 +39,48 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
   const [apiKey, setApiKey] = useState('')
   const [keyStatus, setKeyStatus] = useState<{ message: string, type: 'success' | 'error' | null }>({ message: '', type: null })
   const [isLoading, setIsLoading] = useState(false)
+  
+  // RAG Settings
+  const [ragEnabled, setRagEnabled] = useState(true)
+  const [autoRag, setAutoRag] = useState(true)
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [availableTags, setAvailableTags] = useState<string[]>(['work', 'personal', 'resume', 'education'])
+  const [ragStatus, setRagStatus] = useState<{ message: string, type: 'success' | 'error' | null }>({ message: '', type: null })
 
-  // Load existing API key on mount
+  // Load existing API key and RAG settings on mount
   useEffect(() => {
     if (isOpen) {
-      loadApiKey()
+      loadSettings()
     }
   }, [isOpen])
 
-  const loadApiKey = async () => {
+  const loadSettings = async () => {
     try {
-      const result = await chrome.storage.sync.get(['geminiApiKey'])
+      const result = await chrome.storage.sync.get([
+        'geminiApiKey', 
+        'ragEnabled', 
+        'autoRag', 
+        'selectedTags',
+        'availableTags'
+      ])
+      
       if (result.geminiApiKey) {
         setApiKey(result.geminiApiKey)
       }
+      if (result.ragEnabled !== undefined) {
+        setRagEnabled(result.ragEnabled)
+      }
+      if (result.autoRag !== undefined) {
+        setAutoRag(result.autoRag)
+      }
+      if (result.selectedTags) {
+        setSelectedTags(result.selectedTags)
+      }
+      if (result.availableTags) {
+        setAvailableTags(result.availableTags)
+      }
     } catch (error) {
-      console.error('Failed to load API key:', error)
+      console.error('Failed to load settings:', error)
     }
   }
 
@@ -78,6 +104,37 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
       setKeyStatus({ message: 'Failed to save API key', type: 'error' })
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const saveRagSettings = async () => {
+    setIsLoading(true)
+    try {
+      await chrome.storage.sync.set({ 
+        ragEnabled, 
+        autoRag, 
+        selectedTags,
+        availableTags 
+      })
+      setRagStatus({ message: 'RAG settings saved successfully!', type: 'success' })
+      
+      // Clear status after 3 seconds
+      setTimeout(() => {
+        setRagStatus({ message: '', type: null })
+      }, 3000)
+    } catch (error) {
+      console.error('Save RAG settings error:', error)
+      setRagStatus({ message: 'Failed to save RAG settings', type: 'error' })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const toggleTag = (tag: string) => {
+    if (selectedTags.includes(tag)) {
+      setSelectedTags(selectedTags.filter(t => t !== tag))
+    } else {
+      setSelectedTags([...selectedTags, tag])
     }
   }
 
@@ -117,6 +174,73 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
               <div className={`key-status ${keyStatus.type}`}>
                 {keyStatus.message}
               </div>
+            )}
+          </div>
+
+          {/* RAG Knowledge Settings */}
+          <div className="setting-group">
+            <h3>Knowledge Settings</h3>
+            <p className="setting-description">Configure how AI uses your knowledge base for form filling</p>
+            
+            <div className="setting-row">
+              <label className="checkbox-label">
+                <input 
+                  type="checkbox" 
+                  checked={ragEnabled}
+                  onChange={(e) => setRagEnabled(e.target.checked)}
+                />
+                <span>Enable knowledge search</span>
+              </label>
+            </div>
+
+            {ragEnabled && (
+              <>
+                <div className="setting-row">
+                  <label className="checkbox-label">
+                    <input 
+                      type="checkbox" 
+                      checked={autoRag}
+                      onChange={(e) => setAutoRag(e.target.checked)}
+                    />
+                    <span>Auto-select relevant knowledge (recommended)</span>
+                  </label>
+                </div>
+
+                {!autoRag && (
+                  <div className="setting-row">
+                    <h4>Knowledge Tags</h4>
+                    <p className="setting-subdescription">Select which types of knowledge to use:</p>
+                    <div className="tags-container">
+                      {availableTags.map(tag => (
+                        <button
+                          key={tag}
+                          type="button"
+                          className={`tag-btn ${selectedTags.includes(tag) ? 'selected' : ''}`}
+                          onClick={() => toggleTag(tag)}
+                        >
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="input-group">
+                  <button 
+                    className="save-btn" 
+                    onClick={saveRagSettings}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? 'Saving...' : 'Save Knowledge Settings'}
+                  </button>
+                </div>
+
+                {ragStatus.message && (
+                  <div className={`key-status ${ragStatus.type}`}>
+                    {ragStatus.message}
+                  </div>
+                )}
+              </>
             )}
           </div>
 
