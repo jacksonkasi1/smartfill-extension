@@ -1,16 +1,14 @@
 # SmartFill Monorepo
 
-A browser extension with memory RAG capabilities for intelligent form filling.
+A browser extension with memory RAG capabilities for intelligent form filling using AI.
 
 ## Architecture
 
 This monorepo contains:
 
-- **apps/extension** - Browser extension built with WXT
-- **apps/website** - Next.js dashboard
-- **packages/shared-types** - Shared TypeScript types
-- **packages/auth-client** - Clerk authentication utilities
-- **packages/config** - Shared configuration
+- **apps/smartfill-extension-clerk** - Chrome extension built with Plasmo and Clerk auth
+- **apps/website** - Next.js dashboard with Radix UI components  
+- **apps/rag-service** - Hono-based RAG service with TiDB Vector database for knowledge management
 
 ## Setup
 
@@ -19,35 +17,66 @@ This monorepo contains:
 cp .env.example .env.local
 ```
 
-2. Fill in your API keys in `.env.local`
+2. Fill in your API keys in `.env.local`:
+   - Clerk authentication keys
+   - OpenAI API key  
+   - Gemini API key (for extension)
 
 3. Install dependencies:
 ```bash
-npm install
+bun install
 ```
 
-4. Build all packages:
+4. Build all apps:
 ```bash
-npm run build
+bun run build
 ```
 
 ## Development
 
-- Run all apps: `npm run dev`
-- Build all: `npm run build`
-- Lint all: `npm run lint`
-- Type check: `npm run typecheck`
+- Run all apps: `bun run dev`
+- Build all: `bun run build`
+- Lint all: `bun run lint`
+- Type check: `bun run typecheck`
+- Test: `bun run test`
+- Clean: `bun run clean`
 
 ## Environment Variables
 
-- **CLERK_PUBLISHABLE_KEY** & **CLERK_SECRET_KEY** - Clerk authentication
-- **OPENAI_API_KEY** - OpenAI API
+- **NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY** & **CLERK_SECRET_KEY** - Clerk authentication
+- **OPENAI_API_KEY** - OpenAI API for RAG service
+- **GEMINI_API_KEY** - Google Gemini API for extension
+- **NODE_ENV** - Development/production environment
+
+## Apps Details
+
+### Browser Extension (`apps/smartfill-extension-clerk`)
+- Built with **Plasmo** framework
+- **Clerk** authentication integration
+- Chrome extension with form-filling capabilities
+- TypeScript + React
+
+### Website (`apps/website`) 
+- **Next.js 15** application
+- **Clerk** authentication
+- **Radix UI** components with **Tailwind CSS**
+- **TypeScript** support
+
+### RAG Service (`apps/rag-service`)
+- **Hono** web framework
+- **Drizzle ORM** with **TiDB** database
+- **TiDB Vector** for RAG embeddings storage
+- **OpenAI** embeddings and completions
+- User-specific knowledge management
+- **TypeScript** with ESM support
 
 ## Features
 
-- **User Authentication** - Secure login with Clerk
+- **AI-Powered Form Filling** - Intelligent form completion using RAG
+- **User Authentication** - Secure login with Clerk across all apps
+- **Knowledge Management** - Personal RAG service for each user
 - **Cross-platform** - Browser extension + web dashboard
-- **Type-safe** - Full TypeScript support across packages
+- **Type-safe** - Full TypeScript support across all apps
 
 
 ---
