@@ -12,8 +12,10 @@
 - [ ] Build `KnowledgeUploadModal` component (popup with text input + .txt file upload)
 - [ ] Add file upload validation (only .txt files supported)
 - [ ] Add simple form validation using Zod
-- [ ] Create `KnowledgeTable` component with real-time updates
-- [ ] Build simple table with columns: Title, Tags, Updated, Actions
+- [ ] Use existing data-table from `apps/website/src/components/data-table`
+- [ ] Learn data-table usage from `apps/website/tnks-data-table-main/README.md`
+- [ ] Follow examples in `apps/website/tnks-data-table-main/src/app/(home)/data-table`
+- [ ] Create KnowledgeTable with columns: Title, Tags, Updated, Actions
 - [ ] Add inline edit functionality within table rows
 - [ ] Implement delete confirmation dialog
 - [ ] Add search functionality with real-time filtering
@@ -207,6 +209,13 @@
 - Keep UI minimalist and labels simple/understandable
 - Maintain TypeScript strict mode
 - Run lint/typecheck/build before each stage completion
+
+### Frontend Coding Standards
+- **MUST follow:** `.cursor/rules/frontend-data-table-standards.mdc`
+- **MUST follow:** `.cursor/rules/better-code.mdc`
+- **Data Table Usage:** Use existing `apps/website/src/components/data-table`
+- **Data Table Reference:** Learn from `apps/website/tnks-data-table-main/README.md`
+- **Data Table Examples:** Follow patterns in `apps/website/tnks-data-table-main/src/app/(home)/data-table`
 
 ### Testing Requirements
 - All stages must pass: `npm run lint`, `npm run typecheck`, `npm run build`
