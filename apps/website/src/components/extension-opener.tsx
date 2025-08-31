@@ -44,8 +44,10 @@ export function ExtensionOpener() {
           }
         }, '*')
 
+
         // Method 3: Try to interact with extension directly if available
         if (typeof window !== 'undefined' && (window as any).chrome?.runtime) {
+          // Try to send message to extension
           (window as any).chrome.runtime.sendMessage(EXTENSION_CONFIG.EXTENSION_ID, {
             action: 'OPEN_POPUP',
             userId: user.id,
@@ -54,6 +56,20 @@ export function ExtensionOpener() {
           }).catch(() => {
             // Extension not available, that's okay
           })
+
+          // Also set auth sync signal in storage for the extension to find
+          if ((window as any).chrome?.storage) {
+            (window as any).chrome.storage.local.set({
+              smartfill_auth_sync: {
+                userId: user.id,
+                userEmail: user.primaryEmailAddress?.emailAddress,
+                userName: user.fullName || user.firstName || 'User',
+                timestamp: Date.now()
+              }
+            }).catch(() => {
+              // Storage not available, that's okay
+            })
+          }
         }
 
         console.log('SmartFill: Triggered extension opening for user:', user.id)
