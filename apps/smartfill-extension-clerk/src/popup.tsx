@@ -1,4 +1,7 @@
+// ** import core packages
 import React, { useState, useEffect } from "react"
+
+// ** import third party
 import {
   ClerkProvider,
   SignedIn,
@@ -7,12 +10,16 @@ import {
   useClerk
 } from "@clerk/chrome-extension"
 
+// ** import config
+import { ENV } from "@/config/env"
+
+// ** import styles
 import "./styles/index.css"
 
-// Import assets
+// ** import assets
 import iconUrl from "data-base64:~assets/icons/icon.png"
 
-// Import icons from ts-icons
+// ** import icons
 import { 
   DownloadIcon, 
   UploadIcon, 
@@ -27,13 +34,7 @@ import {
   StopIcon
 } from "./assets/ts-icons"
 
-const PUBLISHABLE_KEY = process.env.PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY!
 const EXTENSION_URL = chrome.runtime.getURL(".")
-const SYNC_HOST = process.env.PLASMO_PUBLIC_CLERK_SYNC_HOST
-
-if (!PUBLISHABLE_KEY) {
-  throw new Error("Please add the PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY to the .env.development file")
-}
 
 function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
   const [apiKey, setApiKey] = useState('')
@@ -297,19 +298,16 @@ function UserProfileModal({ isOpen, onClose, user }: { isOpen: boolean, onClose:
   
   const handleSignOut = async () => {
     try {
-      // Try to sign out directly using Clerk
       await signOut({
-        redirectUrl: 'http://localhost:3000/?signout=extension'
+        redirectUrl: `${ENV.CLERK_SYNC_HOST}/?signout=extension`
       })
       onClose()
     } catch (error) {
-      // Fallback: redirect to website for logout
       chrome.tabs.create({ 
-        url: 'http://localhost:3000/?signout=extension',
+        url: `${ENV.CLERK_SYNC_HOST}/?signout=extension`,
         active: true
       })
       onClose()
-      // Close the extension popup after redirecting
       window.close()
     }
   }
@@ -356,7 +354,7 @@ function FormFillerContent() {
   const { user, isSignedIn } = useUser()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [userProfileOpen, setUserProfileOpen] = useState(false)
-  const [currentPage, setCurrentPage] = useState('formFill') // 'formFill' or 'recordSession'
+  const [currentPage, setCurrentPage] = useState('formFill')
   const [promptText, setPromptText] = useState('')
   const [isFormFilling, setIsFormFilling] = useState(false)
   const [statusMessage, setStatusMessage] = useState<{text: string, type: 'success' | 'error' | 'info'} | null>(null)
@@ -371,8 +369,8 @@ function FormFillerContent() {
   }
 
   const handleSignIn = () => {
-    // Open website with auth trigger
-    chrome.tabs.create({ url: 'http://localhost:3000/?auth=extension' })
+    chrome.tabs.create({ url: `${ENV.CLERK_SYNC_HOST}/?auth=extension` })
+    window.close()
   }
 
 
@@ -577,11 +575,11 @@ function FormFillerContent() {
 function IndexPopup() {
   return (
     <ClerkProvider
-      publishableKey={PUBLISHABLE_KEY}
+      publishableKey={ENV.CLERK_PUBLISHABLE_KEY}
       afterSignOutUrl={`${EXTENSION_URL}/popup.html`}
       signInFallbackRedirectUrl={`${EXTENSION_URL}/popup.html`}
       signUpFallbackRedirectUrl={`${EXTENSION_URL}/popup.html`}
-      syncHost={SYNC_HOST}
+      syncHost={ENV.CLERK_SYNC_HOST}
     >
       <FormFillerContent />
     </ClerkProvider>
