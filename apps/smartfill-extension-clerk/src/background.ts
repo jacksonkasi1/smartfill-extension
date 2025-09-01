@@ -1,8 +1,46 @@
+// ** import core packages
+import { createClerkClient } from '@clerk/chrome-extension/background'
+
 // ** import utils
 import { MessageListener, MessagingTypes, MESSAGE_ACTIONS } from "@/lib/utils/messaging"
 
+// ** import config
+import { ENV } from '@/config/env'
+
 // ** import services
 import { ragClient } from '@/services/rag'
+
+// Create Clerk client for background script
+async function getClerkToken(): Promise<string | null> {
+  try {
+    console.log('Background: Creating Clerk client...')
+    const clerk = await createClerkClient({
+      publishableKey: ENV.CLERK_PUBLISHABLE_KEY
+    })
+    
+    console.log('Background: Clerk client created, checking session...')
+    if (!clerk.session) {
+      console.warn('Background: No Clerk session available')
+      return null
+    }
+    
+    console.log('Background: Getting token from session...')
+    const token = await clerk.session.getToken()
+    
+    if (token) {
+      console.log('Background: Token retrieved successfully')
+      console.log('Background: Token preview:', token.substring(0, 50) + '...')
+      console.log('Background: Full token length:', token.length)
+    } else {
+      console.warn('Background: Token is null/empty')
+    }
+    
+    return token
+  } catch (error) {
+    console.error('Background: Failed to get Clerk token:', error)
+    return null
+  }
+}
 
 // Type-safe message listener for popup operations
 chrome.runtime.onMessage.addListener(
@@ -32,23 +70,18 @@ chrome.runtime.onMessage.addListener(
 
     if (message.action === 'GET_AUTH_TOKEN') {
       try {
-        // Try to get auth token from storage
-        const result = await chrome.storage.local.get(['authToken', 'authTokenExpiry'])
+        console.log('Background: GET_AUTH_TOKEN request received')
+        const token = await getClerkToken()
         
-        if (result.authToken && result.authTokenExpiry) {
-          const now = Date.now()
-          const expiry = parseInt(result.authTokenExpiry)
-          
-          if (now < expiry) {
-            return { success: true, token: result.authToken }
-          } else {
-            // Token expired, clean up
-            await chrome.storage.local.remove(['authToken', 'authTokenExpiry'])
-          }
+        if (token) {
+          console.log('Background: Returning token to requester')
+          return { success: true, token }
         }
         
+        console.log('Background: No token available, returning error')
         return { success: false, error: 'No valid auth token available' }
       } catch (error) {
+        console.error('Background: GET_AUTH_TOKEN error:', error)
         return { 
           success: false, 
           error: error instanceof Error ? error.message : 'Failed to get auth token'

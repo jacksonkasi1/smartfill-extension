@@ -1,5 +1,9 @@
 // ** import types
 import type { FormField } from '@/types/extension'
+import type { AxiosInstance, AxiosResponse } from 'axios'
+
+// ** import core packages
+import axios from 'axios'
 
 // ** import config
 import { ENV } from '@/config/env'
@@ -39,93 +43,123 @@ interface UserRAGSettings {
   selectedTags: string[]
 }
 
-// Create a mock token for development/testing
-function createMockToken(userId: string = 'test-user-123'): string {
-  const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
-  const payload = btoa(JSON.stringify({ 
-    sub: userId, 
-    userId: userId, 
-    iat: Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.now() / 1000) + 3600 // 1 hour expiry
-  }))
-  const signature = 'bW9jay1zaWduYXR1cmU=' // base64 encoded 'mock-signature'
-  
-  return `${header}.${payload}.${signature}`
-}
 
 async function getAuthToken(): Promise<string | null> {
   try {
-    // Try to get auth token from storage (set by popup)
-    const result = await chrome.storage.local.get(['authToken', 'authTokenExpiry'])
+    console.log('RAG Client: Requesting auth token from background...')
+    const response = await chrome.runtime.sendMessage({ action: 'GET_AUTH_TOKEN' })
     
-    if (result.authToken && result.authTokenExpiry) {
-      const now = Date.now()
-      const expiry = parseInt(result.authTokenExpiry)
-      
-      if (now < expiry) {
-        return result.authToken
-      } else {
-        // Token expired, clean up
-        await chrome.storage.local.remove(['authToken', 'authTokenExpiry'])
-      }
+    if (response?.success && response.token) {
+      console.log('RAG Client: Token received successfully')
+      console.log('RAG Client: Token preview:', response.token.substring(0, 50) + '...')
+      console.log('RAG Client: Full token length:', response.token.length)
+      return response.token
+    } else {
+      console.warn('RAG Client: No token received:', response)
+      return null
     }
-    
-    // Try to communicate with popup to get fresh token
-    try {
-      const response = await chrome.runtime.sendMessage({ action: 'GET_AUTH_TOKEN' })
-      if (response?.token) {
-        return response.token
-      }
-    } catch (error) {
-      // Silently handle communication errors
-    }
-
-    // Fallback: create mock token for development
-    return createMockToken('test-user-123')
   } catch (error) {
-    console.error('Failed to get auth token:', error)
+    console.error('RAG Client: Failed to get auth token from background:', error)
     return null
   }
 }
 
+// API Error Class
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status?: number,
+    public details?: any
+  ) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
+
 export class RAGClient {
-  private baseURL: string
+  private httpClient: AxiosInstance
 
   constructor() {
-    this.baseURL = ENV.RAG_SERVICE_URL
+    this.httpClient = this.createAxiosInstance()
   }
 
-  private async makeRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const token = await getAuthToken()
-    
-    const headers = {
-      'Content-Type': 'application/json',
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-      ...options.headers,
-    }
-
-    const response = await fetch(`${this.baseURL}${endpoint}`, {
-      ...options,
-      headers,
+  private createAxiosInstance(): AxiosInstance {
+    const instance = axios.create({
+      baseURL: ENV.RAG_SERVICE_URL,
+      timeout: 30000,
+      headers: {
+        'Content-Type': 'application/json',
+      },
     })
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`RAG API error: ${response.status} ${response.statusText} - ${errorText}`)
-    }
+    // Request interceptor for auth
+    instance.interceptors.request.use(
+      async (config) => {
+        try {
+          console.log('RAG Client: Making API request to:', config.url)
+          const token = await getAuthToken()
+          if (token) {
+            config.headers.Authorization = `Bearer ${token}`
+            console.log('RAG Client: Authorization header added to request')
+          } else {
+            console.warn('RAG Client: No auth token available for RAG API request')
+          }
+        } catch (error) {
+          console.error('RAG Client: Auth token retrieval failed:', error)
+        }
+        return config
+      },
+      (error) => Promise.reject(error)
+    )
 
-    return response.json()
+    // Response interceptor for error handling
+    instance.interceptors.response.use(
+      (response: AxiosResponse) => response,
+      (error) => {
+        if (error.response) {
+          const { status, data } = error.response
+          throw new ApiError(
+            data?.message || `HTTP ${status}: ${error.response.statusText}`,
+            status,
+            data
+          )
+        } else if (error.request) {
+          throw new ApiError('Network error: No response received', undefined, error)
+        } else {
+          throw new ApiError(error.message || 'Request failed', undefined, error)
+        }
+      }
+    )
+
+    return instance
+  }
+
+  private async makeRequest<T>(endpoint: string, options: any = {}): Promise<T> {
+    try {
+      const response = await this.httpClient({
+        url: endpoint,
+        ...options,
+      })
+      return response.data
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error
+      }
+      throw new ApiError(`Request failed: ${error instanceof Error ? error.message : 'Unknown error'}`, undefined, error)
+    }
   }
 
   async queryKnowledge(request: RAGQueryRequest): Promise<RAGQueryResponse> {
     return this.makeRequest<RAGQueryResponse>('/knowledge/query', {
       method: 'POST',
-      body: JSON.stringify(request),
+      data: request,
     })
   }
 
   async getKnowledgeStats(): Promise<KnowledgeStatsResponse> {
-    return this.makeRequest<KnowledgeStatsResponse>('/knowledge/stats')
+    return this.makeRequest<KnowledgeStatsResponse>('/knowledge/stats', {
+      method: 'GET',
+    })
   }
 
   async getAvailableTags(): Promise<string[]> {

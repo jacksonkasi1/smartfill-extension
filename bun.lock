@@ -41,6 +41,7 @@
       "version": "1.0.1",
       "dependencies": {
         "@clerk/chrome-extension": "^2.5.23",
+        "axios": "^1.11.0",
         "react": "^18.3.1",
         "react-dom": "^18.3.1",
       },
