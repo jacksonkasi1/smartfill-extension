@@ -11,7 +11,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
@@ -21,6 +20,7 @@ import { knowledgeSchema } from "../schema"
 
 // ** import components
 import { DeleteKnowledgePopup } from "./actions/delete-knowledge-popup"
+import { EditKnowledgePopup } from "./actions/edit-knowledge-popup"
 
 interface DataTableRowActionsProps<TData> {
   row: Row<TData>
@@ -32,10 +32,11 @@ export function DataTableRowActions<TData>({
   table,
 }: DataTableRowActionsProps<TData>) {
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
+  const [editDialogOpen, setEditDialogOpen] = React.useState(false)
   const knowledge = knowledgeSchema.parse(row.original)
 
   const handleEdit = () => {
-    console.log(knowledge)
+    setEditDialogOpen(true)
   }
 
   // Function to reset all selections
@@ -45,7 +46,7 @@ export function DataTableRowActions<TData>({
 
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
@@ -57,16 +58,18 @@ export function DataTableRowActions<TData>({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-[160px]">
           <DropdownMenuItem onClick={handleEdit}>Edit</DropdownMenuItem>
-          <DropdownMenuItem>Make a copy</DropdownMenuItem>
-          <DropdownMenuItem>Favorite</DropdownMenuItem>
-          <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setDeleteDialogOpen(true)}>
             Delete
             <DropdownMenuShortcut>⌘⌫</DropdownMenuShortcut>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-
+      <EditKnowledgePopup
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        knowledge={knowledge}
+        resetSelection={resetSelection}
+      />
       <DeleteKnowledgePopup
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}

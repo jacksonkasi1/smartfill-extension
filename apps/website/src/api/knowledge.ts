@@ -56,6 +56,11 @@ export async function uploadKnowledgeFile(file: File, title: string) {
   return response.data
 }
 
+export async function updateKnowledge(id: string, knowledgeData: Partial<CreateKnowledge>) {
+  const response = await httpClient.put(`/knowledge/${id}`, knowledgeData)
+  return response.data
+}
+
 export async function deleteKnowledge(id: string) {
   const response = await httpClient.delete(`/knowledge/${id}`)
   return response.data
