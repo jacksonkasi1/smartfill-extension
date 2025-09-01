@@ -28,13 +28,17 @@ export class VectorService {
     _tags: string[] = [],
     _type: 'text' | 'file' = 'text'
   ) {
-    const vectors = await Promise.all(chunks.map(async (chunk, index) => ({
-      id: randomUUID(),
-      knowledgeId,
-      content: chunk,
-      chunkIndex: index.toString(),
-      embedding: await this.generateEmbedding(chunk),
-    })))
+    // Combine title with each chunk for better semantic search
+    const vectors = await Promise.all(chunks.map(async (chunk, index) => {
+      const combinedText = `${title}: ${chunk}`
+      return {
+        id: randomUUID(),
+        knowledgeId,
+        content: chunk, // Store original chunk content
+        chunkIndex: index.toString(),
+        embedding: await this.generateEmbedding(combinedText), // Vectorize combined text
+      }
+    }))
 
     await db.insert(knowledgeChunks).values(vectors)
     
@@ -54,7 +58,7 @@ export class VectorService {
       minScore?: number
     } = {}
   ) {
-    const { topK = 5, minScore = 0.7 } = options
+    const { topK = 5, minScore = 0.3 } = options
     const queryEmbedding = await this.generateEmbedding(query)
     
     // Get all chunks for the user (fallback approach without vector search)

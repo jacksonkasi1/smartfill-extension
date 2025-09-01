@@ -125,9 +125,10 @@ export class KnowledgeService {
     const existing = await this.getKnowledgeById(userId, id)
     if (!existing) return null
 
-    if (updates.content) {
-      const sanitizedContent = TextProcessor.sanitizeText(updates.content)
-      const chunks = TextProcessor.chunkText(sanitizedContent)
+    // Re-vectorize if content OR title changes
+    if (updates.content || updates.title) {
+      const newContent = updates.content ? TextProcessor.sanitizeText(updates.content) : existing.content
+      const chunks = TextProcessor.chunkText(newContent)
 
       await this.vectorService.updateKnowledgeChunks(
         userId,
@@ -179,7 +180,7 @@ export class KnowledgeService {
       minScore?: number
     } = {}
   ): Promise<QueryResult[]> {
-    const { limit = 5, minScore = 0.7 } = options
+    const { limit = 5, minScore = 0.3 } = options
 
     const results = await this.vectorService.queryKnowledge(userId, query, {
       topK: limit,
