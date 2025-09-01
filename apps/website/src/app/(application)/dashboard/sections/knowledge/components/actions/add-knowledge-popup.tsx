@@ -6,6 +6,9 @@ import { toast } from "sonner"
 import { useForm } from "react-hook-form"
 import { useQueryClient } from "@tanstack/react-query"
 
+// ** import apis
+import { createKnowledge } from "@/api/knowledge"
+
 // ** import ui components
 import { Button } from "@/components/ui/button"
 import {
@@ -68,20 +71,12 @@ export function AddKnowledgePopup() {
     try {
       setIsLoading(true)
       
-      const response = await fetch("http://localhost:3001/api/v1/knowledge", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          title: data.title,
-          content: data.content,
-          tags: data.tags.map(tag => tag.text),
-          type: "text",
-        }),
+      const result = await createKnowledge({
+        title: data.title,
+        content: data.content,
+        tags: data.tags.map(tag => tag.text),
+        type: "text",
       })
-
-      const result = await response.json()
 
       if (result.success) {
         toast.success("Knowledge added successfully")

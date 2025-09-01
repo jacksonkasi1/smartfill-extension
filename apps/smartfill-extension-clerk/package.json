@@ -16,7 +16,7 @@
   "manifest": {
     "name": "SmartFill - AI Form Filler",
     "permissions": ["storage", "activeTab", "tabs", "scripting", "cookies"],
-    "host_permissions": ["http://localhost/*", "https://smartfill.vercel.app/*", "https://patient-wildcat-29.clerk.accounts.dev/*"]
+    "host_permissions": ["http://localhost/*", "http://127.0.0.1/*", "http://*:*/*", "https://smartfill.vercel.app/*", "https://patient-wildcat-29.clerk.accounts.dev/*"]
   },
   "devDependencies": {
     "@types/chrome": "^0.1.4",

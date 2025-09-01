@@ -37,6 +37,11 @@ export function fillTextField(element: HTMLInputElement | HTMLTextAreaElement, v
 
 export function fillSelectField(element: HTMLSelectElement, value: string): boolean {
   try {
+    if (!element || !element.options) {
+      console.warn('Invalid select element or options not available')
+      return false
+    }
+    
     element.focus()
     
     const option = Array.from(element.options).find(opt => 

@@ -200,27 +200,51 @@ export class KnowledgeService {
     }))
   }
 
-  async getKnowledgeStats(userId: string): Promise<{ total: number; recent: number }> {
-    // Get total count
-    const [totalResult] = await db
-      .select({ count: count() })
+  async getKnowledgeStats(userId: string): Promise<{ 
+    total: number; 
+    recent: number; 
+    uniqueTags: string[];
+    averageLength: number;
+    lastUpdated: string;
+  }> {
+    // Get total count and all data for stats calculation
+    const userKnowledge = await db
+      .select()
       .from(knowledge)
       .where(eq(knowledge.userId, userId))
 
-    // Get recent count (last 7 days)
+    const total = userKnowledge.length
+    
+    // Calculate recent count (last 7 days)
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-    const [recentResult] = await db
-      .select({ count: count() })
-      .from(knowledge)
-      .where(and(
-        eq(knowledge.userId, userId),
-        // Note: This would need proper date comparison based on your database
-        // For now, returning 0 for recent count
-      ))
+    const recent = userKnowledge.filter(k => 
+      new Date(k.updatedAt) >= sevenDaysAgo
+    ).length
+
+    // Extract unique tags
+    const allTags = userKnowledge.flatMap(k => 
+      Array.isArray(k.tags) ? k.tags : (k.tags ? JSON.parse(k.tags as string) : [])
+    )
+    const uniqueTags = [...new Set(allTags)].filter(Boolean)
+
+    // Calculate average content length
+    const averageLength = total > 0 
+      ? Math.round(userKnowledge.reduce((sum, k) => sum + k.content.length, 0) / total)
+      : 0
+
+    // Find last updated timestamp
+    const lastUpdated = userKnowledge.length > 0
+      ? userKnowledge.reduce((latest, k) => 
+          new Date(k.updatedAt) > new Date(latest.updatedAt) ? k : latest
+        ).updatedAt
+      : new Date().toISOString()
 
     return {
-      total: totalResult?.count || 0,
-      recent: 0, // TODO: Implement proper date filtering based on database schema
+      total,
+      recent,
+      uniqueTags,
+      averageLength,
+      lastUpdated: typeof lastUpdated === 'string' ? lastUpdated : lastUpdated.toISOString(),
     }
   }
 }

@@ -77,21 +77,14 @@ export const knowledgeApi = {
   /**
    * Get paginated list of user's knowledge
    * @param params - Pagination parameters
-   * @param token - Authorization token
    * @returns Promise<PaginatedResponse<Knowledge>>
    */
   async getKnowledgeList(
-    params: PaginationParams = {},
-    token: string
+    params: PaginationParams = {}
   ): Promise<PaginatedResponse<Knowledge>> {
     const { page = 1, limit = 10 } = params;
     const response = await httpClient.get<PaginatedResponse<Knowledge>>(
-      `/knowledge?page=${page}&limit=${limit}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
+      `/knowledge?page=${page}&limit=${limit}`
     );
     return response.data;
   },
@@ -99,21 +92,14 @@ export const knowledgeApi = {
   /**
    * Create new knowledge
    * @param data - Knowledge creation data
-   * @param token - Authorization token
    * @returns Promise<ApiResponse<Knowledge>>
    */
   async createKnowledge(
-    data: CreateKnowledgeRequest,
-    token: string
+    data: CreateKnowledgeRequest
   ): Promise<ApiResponse<Knowledge>> {
     const response = await httpClient.post<ApiResponse<Knowledge>>(
       '/knowledge',
-      data,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
+      data
     );
     return response.data;
   },
@@ -121,21 +107,14 @@ export const knowledgeApi = {
   /**
    * Query knowledge using semantic search
    * @param data - Query parameters
-   * @param token - Authorization token
    * @returns Promise<ApiResponse<QueryResult[]>>
    */
   async queryKnowledge(
-    data: QueryKnowledgeRequest,
-    token: string
+    data: QueryKnowledgeRequest
   ): Promise<ApiResponse<QueryResult[]>> {
     const response = await httpClient.post<ApiResponse<QueryResult[]>>(
       '/knowledge/query',
-      data,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
+      data
     );
     return response.data;
   },
@@ -143,20 +122,13 @@ export const knowledgeApi = {
   /**
    * Get knowledge by ID
    * @param id - Knowledge ID
-   * @param token - Authorization token
    * @returns Promise<ApiResponse<Knowledge>>
    */
   async getKnowledgeById(
-    id: string,
-    token: string
+    id: string
   ): Promise<ApiResponse<Knowledge>> {
     const response = await httpClient.get<ApiResponse<Knowledge>>(
-      `/knowledge/${id}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
+      `/knowledge/${id}`
     );
     return response.data;
   },
@@ -165,22 +137,15 @@ export const knowledgeApi = {
    * Update knowledge by ID
    * @param id - Knowledge ID
    * @param data - Update data
-   * @param token - Authorization token
    * @returns Promise<ApiResponse<Knowledge>>
    */
   async updateKnowledge(
     id: string,
-    data: UpdateKnowledgeRequest,
-    token: string
+    data: UpdateKnowledgeRequest
   ): Promise<ApiResponse<Knowledge>> {
     const response = await httpClient.put<ApiResponse<Knowledge>>(
       `/knowledge/${id}`,
-      data,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
+      data
     );
     return response.data;
   },
@@ -188,20 +153,13 @@ export const knowledgeApi = {
   /**
    * Delete knowledge by ID
    * @param id - Knowledge ID
-   * @param token - Authorization token
    * @returns Promise<ApiResponse<{ id: string }>>
    */
   async deleteKnowledge(
-    id: string,
-    token: string
+    id: string
   ): Promise<ApiResponse<{ id: string }>> {
     const response = await httpClient.delete<ApiResponse<{ id: string }>>(
-      `/knowledge/${id}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
+      `/knowledge/${id}`
     );
     return response.data;
   },
@@ -211,14 +169,12 @@ export const knowledgeApi = {
    * @param file - File to upload
    * @param title - Knowledge title
    * @param tags - Optional tags
-   * @param token - Authorization token
    * @returns Promise<ApiResponse<Knowledge>>
    */
   async uploadFile(
     file: File,
     title: string,
-    tags: string[] = [],
-    token: string
+    tags: string[] = []
   ): Promise<ApiResponse<Knowledge>> {
     const formData = new FormData();
     formData.append('file', file);
@@ -230,7 +186,6 @@ export const knowledgeApi = {
       formData,
       {
         headers: {
-          Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data',
         },
       }

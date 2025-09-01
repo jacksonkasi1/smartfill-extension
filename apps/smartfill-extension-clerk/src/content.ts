@@ -1,25 +1,26 @@
+// ** import types
 import type { PlasmoCSConfig } from "plasmo"
 import type { ExtensionMessage, DetectResult, FillResult } from './types/extension'
-import { detectAllForms, fillForm } from './lib'
-import { generateFormData } from './api'
+
+// ** import utils
 import { MessageListener, MessagingClient, WebsiteEvents, MessagingTypes, MESSAGE_ACTIONS } from "@/lib/utils/messaging"
+
+// ** import lib
+import { detectAllForms, fillForm } from './lib'
+
+// ** import apis
+import { generateFormData } from './api'
 
 export const config: PlasmoCSConfig = {
   matches: ["<all_urls>"]
 }
 
-console.log("SmartFill content script loaded")
-
 // Type-safe website event listeners
 WebsiteEvents.onExtensionOpen((data) => {
-  console.log('SmartFill: Received open extension event from website', data)
-  // Send type-safe message to background script to open popup
   MessagingClient.openPopup({ data }).catch(console.error)
 })
 
 WebsiteEvents.onWebsiteMessage((eventData) => {
-  console.log('SmartFill: Received open extension message from website', eventData.data)
-  // Send type-safe message to background script to open popup
   MessagingClient.openPopup({ data: eventData.data }).catch(console.error)
 })
 
@@ -64,8 +65,22 @@ async function detectForms(): Promise<DetectResult> {
   }
 }
 
+// Helper function to send status updates to popup
+async function sendStatusUpdate(status: string, delay: number = 300) {
+  try {
+    chrome.runtime.sendMessage({ action: 'STATUS_UPDATE', status })
+    // Small delay to let user see the status message
+    if (delay > 0) {
+      await new Promise(resolve => setTimeout(resolve, delay))
+    }
+  } catch (error) {
+    console.log('Could not send status update:', error)
+  }
+}
+
 async function fillForms(customPrompt?: string): Promise<FillResult> {
   try {
+    await sendStatusUpdate('Detecting forms on page...')
     const detectResult = await detectAllForms()
     
     if (!detectResult.success || detectResult.forms.length === 0) {
@@ -86,10 +101,59 @@ async function fillForms(customPrompt?: string): Promise<FillResult> {
       }
     }
 
-    // Generate AI data using the real API
+    await sendStatusUpdate('Loading RAG settings...')
+
+    // Load RAG settings from storage
+    let ragSettings
+    try {
+      const result = await chrome.storage.sync.get(['ragEnabled', 'autoRag', 'selectedTags'])
+      ragSettings = {
+        ragEnabled: result.ragEnabled ?? true,
+        autoRag: result.autoRag ?? true,
+        selectedTags: result.selectedTags ?? []
+      }
+    } catch (error) {
+      console.error('Failed to load RAG settings:', error)
+      ragSettings = { ragEnabled: false, autoRag: true, selectedTags: [] }
+    }
+
+    // Enhance prompt with RAG if enabled
+    let enhancedPrompt = customPrompt || ''
+    
+    if (ragSettings.ragEnabled) {
+      await sendStatusUpdate('🔍 Searching knowledge base...', 500)
+      try {
+        const response = await chrome.runtime.sendMessage({
+          action: 'GENERATE_RAG_PROMPT',
+          fields: allFields,
+          customPrompt,
+          ragSettings
+        })
+        
+        if (response && response.success && response.enhancedPrompt) {
+          enhancedPrompt = response.enhancedPrompt
+          if (enhancedPrompt !== (customPrompt || '')) {
+            await sendStatusUpdate('✅ Found relevant knowledge!', 400)
+          } else {
+            await sendStatusUpdate('⚠️ No relevant knowledge found', 400)
+          }
+        } else {
+          await sendStatusUpdate('❌ Knowledge search failed', 400)
+          console.error('RAG enhancement failed:', response ? response.error : 'No response from background')
+          enhancedPrompt = (response && response.fallbackPrompt) || customPrompt || ''
+        }
+      } catch (error) {
+        await sendStatusUpdate('❌ Knowledge search failed', 400)
+        console.error('RAG communication failed:', error)
+        enhancedPrompt = customPrompt || ''
+      }
+    }
+
+    // Generate AI data using the enhanced prompt
+    await sendStatusUpdate('🤖 Processing with AI...', 200)
     let aiData
     try {
-      aiData = await generateFormData(allFields, customPrompt)
+      aiData = await generateFormData(allFields, enhancedPrompt)
     } catch (error) {
       console.error('AI generation error:', error)
       const errorMessage = error instanceof Error ? error.message : 'AI processing failed'
@@ -101,6 +165,7 @@ async function fillForms(customPrompt?: string): Promise<FillResult> {
     }
     
     // Fill the form using the real logic
+    await sendStatusUpdate('📝 Filling form fields...', 200)
     const fillResult = await fillForm(allFields, aiData)
     return fillResult
   } catch (error) {

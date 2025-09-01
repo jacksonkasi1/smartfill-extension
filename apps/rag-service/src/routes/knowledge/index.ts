@@ -17,11 +17,11 @@ import { response } from '@/utils'
 const app = new Hono<{ Variables: { userId: string } }>()
 const knowledgeService = new KnowledgeService()
 
-// app.use('*', authMiddleware) // Temporarily disabled for testing
+app.use('*', authMiddleware)
 
 app.get('/', zValidator('query', paginationSchema), async (c) => {
   const { page, limit } = c.req.valid('query')
-  const userId = c.get('userId') || 'test-user-123' // Default for testing
+  const userId = c.get('userId')
 
   try {
     const result = await knowledgeService.getUserKnowledge(userId, { page, limit })
@@ -43,7 +43,7 @@ app.post('/', async (c) => {
   }
   
   const data = validation.data
-  const userId = c.get('userId') || 'test-user-123' // Default for testing
+  const userId = c.get('userId')
 
   try {
     const knowledge = await knowledgeService.createKnowledge({
@@ -69,7 +69,7 @@ app.onError((err, c) => {
 
 // File upload endpoint
 app.post('/upload', async (c) => {
-  const userId = c.get('userId') || 'test-user-123' // Default for testing
+  const userId = c.get('userId')
 
   try {
     const body = await c.req.parseBody()
@@ -114,7 +114,7 @@ app.post('/upload', async (c) => {
 
 // Knowledge statistics endpoint
 app.get('/stats', async (c) => {
-  const userId = c.get('userId') || 'test-user-123' // Default for testing
+  const userId = c.get('userId')
 
   try {
     const stats = await knowledgeService.getKnowledgeStats(userId)
@@ -127,7 +127,7 @@ app.get('/stats', async (c) => {
 
 // Delete knowledge endpoint
 app.delete('/:id', async (c) => {
-  const userId = c.get('userId') || 'test-user-123' // Default for testing
+  const userId = c.get('userId')
   const knowledgeId = c.req.param('id')
 
   try {
@@ -140,27 +140,44 @@ app.delete('/:id', async (c) => {
 })
 
 app.post('/query', async (c) => {
+  const timestamp = new Date().toISOString()
+  const userAgent = c.req.header('User-Agent') || 'Unknown'
+  
+  console.log('\n🔍🔍🔍 RAG QUERY REQUEST RECEIVED 🔍🔍🔍')
+  console.log(`⏰ Timestamp: ${timestamp}`)
+  console.log(`🌐 User-Agent: ${userAgent}`)
+  console.log(`📍 Source: ${c.req.header('Origin') || 'Unknown'}`)
+  
   const body = await c.req.json()
-  console.log('Raw query request body:', JSON.stringify(body, null, 2))
+  console.log('📝 Query request body:', JSON.stringify(body, null, 2))
   
   // Manual validation to see what's failing
   const validation = queryKnowledgeSchema.safeParse(body)
   if (!validation.success) {
-    console.error('Query validation failed:', validation.error.issues)
+    console.error('❌ Query validation failed:', validation.error.issues)
     return response.error(c, 'Query validation failed', 400, validation.error.issues)
   }
   
   const { query, limit, minScore } = validation.data
-  const userId = c.get('userId') || 'test-user-123' // Default for testing
+  const userId = c.get('userId')
+
+  console.log(`👤 User ID: ${userId}`)
+  console.log(`🔍 Search Query: "${query}"`)
+  console.log(`📊 Limit: ${limit}, Min Score: ${minScore}`)
 
   try {
     const results = await knowledgeService.queryKnowledge(userId, query, {
       limit,
       minScore,
     })
+    
+    console.log(`✅ Query completed - Found ${results.length} results`)
+    console.log('🔍🔍🔍 END RAG QUERY REQUEST 🔍🔍🔍\n')
+    
     return response.success(c, results, `Found ${results.length} relevant results`)
   } catch (error) {
-    console.error('Query knowledge error:', error)
+    console.error('❌ Query knowledge error:', error)
+    console.log('🔍🔍🔍 END RAG QUERY REQUEST (ERROR) 🔍🔍🔍\n')
     return response.error(c, 'Failed to query knowledge', 500, error)
   }
 })

@@ -15,7 +15,19 @@ const app = new Hono()
 
 // Middleware
 app.use('*', cors({
-  origin: env.ALLOWED_ORIGINS === '*' ? '*' : env.ALLOWED_ORIGINS.split(','),
+  origin: (origin) => {
+    // Allow requests with no origin (like mobile apps or Postman)
+    if (!origin) return true
+    
+    // If ALLOWED_ORIGINS is *, allow all origins but return the actual origin for credentials
+    if (env.ALLOWED_ORIGINS === '*') {
+      return origin
+    }
+    
+    // Otherwise check against allowed origins list
+    const allowedOrigins = env.ALLOWED_ORIGINS.split(',')
+    return allowedOrigins.includes(origin)
+  },
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization'],
   credentials: true,

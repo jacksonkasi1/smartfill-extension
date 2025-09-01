@@ -4,7 +4,8 @@ import type { CreateKnowledge } from '@/types/knowledge'
 // ** import validation
 import { knowledgeResponseSchema, knowledgeStatsSchema } from '@/types/knowledge'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_RAG_SERVICE_URL || 'http://localhost:3001/api/v1'
+// ** import config
+import { httpClient } from './config'
 
 export async function fetchKnowledge({
   search = '',
@@ -33,36 +34,13 @@ export async function fetchKnowledge({
   params.append('page', page.toString())
   params.append('limit', limit.toString())
 
-  const response = await fetch(`${API_BASE_URL}/knowledge?${params.toString()}`, {
-    headers: {
-      'Authorization': `Bearer ${await getAuthToken()}`,
-    },
-  })
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch knowledge: ${response.statusText}`)
-  }
-
-  const data = await response.json()
-  return knowledgeResponseSchema.parse(data)
+  const response = await httpClient.get(`/knowledge?${params.toString()}`)
+  return knowledgeResponseSchema.parse(response.data)
 }
 
 export async function createKnowledge(knowledgeData: CreateKnowledge) {
-  const response = await fetch(`${API_BASE_URL}/knowledge`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${await getAuthToken()}`,
-    },
-    body: JSON.stringify(knowledgeData),
-  })
-
-  if (!response.ok) {
-    throw new Error(`Failed to create knowledge: ${response.statusText}`)
-  }
-
-  const data = await response.json()
-  return data
+  const response = await httpClient.post('/knowledge', knowledgeData)
+  return response.data
 }
 
 export async function uploadKnowledgeFile(file: File, title: string) {
@@ -70,60 +48,20 @@ export async function uploadKnowledgeFile(file: File, title: string) {
   formData.append('file', file)
   formData.append('title', title)
 
-  const response = await fetch(`${API_BASE_URL}/knowledge/upload`, {
-    method: 'POST',
+  const response = await httpClient.post('/knowledge/upload', formData, {
     headers: {
-      'Authorization': `Bearer ${await getAuthToken()}`,
+      'Content-Type': 'multipart/form-data',
     },
-    body: formData,
   })
-
-  if (!response.ok) {
-    throw new Error(`Failed to upload file: ${response.statusText}`)
-  }
-
-  const data = await response.json()
-  return data
+  return response.data
 }
 
 export async function deleteKnowledge(id: string) {
-  const response = await fetch(`${API_BASE_URL}/knowledge/${id}`, {
-    method: 'DELETE',
-    headers: {
-      'Authorization': `Bearer ${await getAuthToken()}`,
-    },
-  })
-
-  if (!response.ok) {
-    throw new Error(`Failed to delete knowledge: ${response.statusText}`)
-  }
-
-  const data = await response.json()
-  return data
+  const response = await httpClient.delete(`/knowledge/${id}`)
+  return response.data
 }
 
 export async function fetchKnowledgeStats() {
-  const response = await fetch(`${API_BASE_URL}/knowledge/stats`, {
-    headers: {
-      'Authorization': `Bearer ${await getAuthToken()}`,
-    },
-  })
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch knowledge stats: ${response.statusText}`)
-  }
-
-  const data = await response.json()
-  return knowledgeStatsSchema.parse(data)
-}
-
-// Helper function to get auth token from Clerk
-async function getAuthToken(): Promise<string> {
-  if (typeof window !== 'undefined') {
-    // For client-side, we'll need to get the token from Clerk
-    // For now, return empty string to allow development
-    return ''
-  }
-  // For server-side, return empty string for now
-  return ''
+  const response = await httpClient.get('/knowledge/stats')
+  return knowledgeStatsSchema.parse(response.data)
 }

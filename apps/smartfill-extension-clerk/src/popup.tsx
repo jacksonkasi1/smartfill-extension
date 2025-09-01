@@ -13,6 +13,9 @@ import {
 // ** import config
 import { ENV } from "@/config/env"
 
+// ** import apis
+import { ragClient } from "@/api/rag"
+
 // ** import styles
 import "./styles/index.css"
 
@@ -45,8 +48,9 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
   const [ragEnabled, setRagEnabled] = useState(true)
   const [autoRag, setAutoRag] = useState(true)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
-  const [availableTags, setAvailableTags] = useState<string[]>(['work', 'personal', 'resume', 'education'])
+  const [availableTags, setAvailableTags] = useState<string[]>([])
   const [ragStatus, setRagStatus] = useState<{ message: string, type: 'success' | 'error' | null }>({ message: '', type: null })
+  const [tagsLoading, setTagsLoading] = useState(false)
 
   // Load existing API key and RAG settings on mount
   useEffect(() => {
@@ -61,8 +65,7 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
         'geminiApiKey', 
         'ragEnabled', 
         'autoRag', 
-        'selectedTags',
-        'availableTags'
+        'selectedTags'
       ])
       
       if (result.geminiApiKey) {
@@ -77,11 +80,24 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
       if (result.selectedTags) {
         setSelectedTags(result.selectedTags)
       }
-      if (result.availableTags) {
-        setAvailableTags(result.availableTags)
-      }
+
+      // Load available tags from the backend
+      await loadAvailableTags()
     } catch (error) {
       console.error('Failed to load settings:', error)
+    }
+  }
+
+  const loadAvailableTags = async () => {
+    setTagsLoading(true)
+    try {
+      const tags = await ragClient.getAvailableTags()
+      setAvailableTags(tags)
+    } catch (error) {
+      console.error('Failed to load available tags:', error)
+      setAvailableTags([])
+    } finally {
+      setTagsLoading(false)
     }
   }
 
@@ -114,10 +130,9 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
       await chrome.storage.sync.set({ 
         ragEnabled, 
         autoRag, 
-        selectedTags,
-        availableTags 
+        selectedTags
       })
-      setRagStatus({ message: 'RAG settings saved successfully!', type: 'success' })
+      setRagStatus({ message: 'Knowledge settings saved successfully!', type: 'success' })
       
       // Clear status after 3 seconds
       setTimeout(() => {
@@ -125,7 +140,7 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
       }, 3000)
     } catch (error) {
       console.error('Save RAG settings error:', error)
-      setRagStatus({ message: 'Failed to save RAG settings', type: 'error' })
+      setRagStatus({ message: 'Failed to save knowledge settings', type: 'error' })
     } finally {
       setIsLoading(false)
     }
@@ -211,18 +226,24 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
                   <div className="setting-row">
                     <h4>Knowledge Tags</h4>
                     <p className="setting-subdescription">Select which types of knowledge to use:</p>
-                    <div className="tags-container">
-                      {availableTags.map(tag => (
-                        <button
-                          key={tag}
-                          type="button"
-                          className={`tag-btn ${selectedTags.includes(tag) ? 'selected' : ''}`}
-                          onClick={() => toggleTag(tag)}
-                        >
-                          {tag}
-                        </button>
-                      ))}
-                    </div>
+                    {tagsLoading ? (
+                      <div className="tags-loading">Loading tags...</div>
+                    ) : availableTags.length > 0 ? (
+                      <div className="tags-container">
+                        {availableTags.map(tag => (
+                          <button
+                            key={tag}
+                            type="button"
+                            className={`tag-btn ${selectedTags.includes(tag) ? 'selected' : ''}`}
+                            onClick={() => toggleTag(tag)}
+                          >
+                            {tag}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="no-tags">No tags available. Add some knowledge with tags first.</div>
+                    )}
                   </div>
                 )}
 
@@ -352,6 +373,7 @@ function UserProfileModal({ isOpen, onClose, user }: { isOpen: boolean, onClose:
 
 function FormFillerContent() {
   const { user, isSignedIn } = useUser()
+  const clerk = useClerk()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [userProfileOpen, setUserProfileOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState('formFill')
@@ -368,6 +390,33 @@ function FormFillerContent() {
     setTimeout(() => setStatusMessage(null), 4000)
   }
 
+  // Store auth token for content scripts to use
+  const storeAuthToken = async () => {
+    if (isSignedIn && clerk.session) {
+      try {
+        const token = await clerk.session.getToken()
+        if (token) {
+          // Store token with 30-minute expiry
+          const expiryTime = Date.now() + (30 * 60 * 1000)
+          await chrome.storage.local.set({
+            authToken: token,
+            authTokenExpiry: expiryTime.toString()
+          })
+        }
+      } catch (error) {
+        console.error('Failed to store auth token:', error)
+      }
+    } else {
+      // Clear token if not signed in
+      await chrome.storage.local.remove(['authToken', 'authTokenExpiry'])
+    }
+  }
+
+  // Store auth token when user signs in or component mounts
+  useEffect(() => {
+    storeAuthToken()
+  }, [isSignedIn])
+
   const handleSignIn = () => {
     chrome.tabs.create({ url: `${ENV.CLERK_SYNC_HOST}/?auth=extension` })
     window.close()
@@ -378,7 +427,7 @@ function FormFillerContent() {
     if (isFormFilling) return // Prevent multiple clicks
     
     setIsFormFilling(true)
-    setStatusMessage({ text: 'Processing with AI...', type: 'info' })
+    setStatusMessage({ text: 'Initializing...', type: 'info' })
     
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
@@ -410,10 +459,22 @@ function FormFillerContent() {
         }
       }
 
+      // Listen for status updates from content script
+      const statusListener = (message: any) => {
+        if (message.action === 'STATUS_UPDATE' && message.status) {
+          setStatusMessage({ text: message.status, type: 'info' })
+        }
+      }
+      
+      chrome.runtime.onMessage.addListener(statusListener)
+
       const response = await chrome.tabs.sendMessage(tab.id, { 
         action: "fillForms", 
         prompt: promptText 
       })
+
+      // Remove listener after completion
+      chrome.runtime.onMessage.removeListener(statusListener)
 
       if (response?.success) {
         const filled = response.filled || 0
