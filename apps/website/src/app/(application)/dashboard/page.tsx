@@ -51,7 +51,7 @@ export default function Dashboard() {
                 <Brain className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{knowledgeStats?.data?.total || 0}</div>
+                <div className="text-2xl font-bold">{(knowledgeStats as any)?.total || 0}</div>
                 <p className="text-xs text-muted-foreground">Saved entries</p>
               </CardContent>
             </Card>

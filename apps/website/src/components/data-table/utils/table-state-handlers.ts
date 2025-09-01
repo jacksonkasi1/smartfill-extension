@@ -11,7 +11,7 @@ type SetStateFunction<T> = (value: T | ((prev: T) => T)) => StatePromise;
 export function createSortingHandler(
   setSortBy: SetStateFunction<string>,
   setSortOrder: SetStateFunction<"asc" | "desc">,
-  defaultSortBy = "created_at"
+  _defaultSortBy = "created_at"
 ) {
   return (updaterOrValue: SortingState | SortingUpdater): void => {
     // Handle both direct values and updater functions

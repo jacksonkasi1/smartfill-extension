@@ -260,6 +260,6 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
  * @param router Next.js router instance
  * @param pathname Current pathname
  */
-export function resetUrlState(router: { replace: (path: string) => void }, pathname: string): void {
+export function resetUrlState(router: any, pathname: string): void {
   router.replace(pathname);
 }

@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 import { GripVertical } from "lucide-react"
 
 // Simplified resizer component without complex types
-export function DataTableResizer({ header, table }: { header: any; table: any }) {
+export function DataTableResizer({ header }: { header: any }) {
   const isResizing = header.column.getIsResizing()
 
   return (

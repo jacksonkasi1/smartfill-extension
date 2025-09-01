@@ -39,11 +39,8 @@ import { DataTableResizer } from "./data-table-resizer";
 // Import core utilities
 import { preprocessSearch } from "./utils/search";
 import {
-  createSortingHandler,
   createColumnFiltersHandler,
   createColumnVisibilityHandler,
-  createPaginationHandler,
-  createColumnSizingHandler,
   createSortingState
 } from "./utils/table-state-handlers";
 import { createKeyboardNavigationHandler } from "./utils/keyboard-navigation";
@@ -77,7 +74,7 @@ interface DataFetchResult<TData> {
 }
 
 // Types for table handlers
-type PaginationUpdater<TData> = (prev: { pageIndex: number; pageSize: number }) => { pageIndex: number; pageSize: number };
+type PaginationUpdater = (prev: { pageIndex: number; pageSize: number }) => { pageIndex: number; pageSize: number };
 type SortingUpdater = (prev: { id: string; desc: boolean }[]) => { id: string; desc: boolean }[];
 type ColumnOrderUpdater = (prev: string[]) => string[];
 type RowSelectionUpdater = (prev: Record<string, boolean>) => Record<string, boolean>;
@@ -452,7 +449,7 @@ export function DataTable<TData extends ExportableData, TValue>({
   );
 
   const handlePaginationChange = useCallback(
-    (updaterOrValue: PaginationUpdater<TData> | { pageIndex: number; pageSize: number }) => {
+    (updaterOrValue: PaginationUpdater | { pageIndex: number; pageSize: number }) => {
       // Extract the new pagination state
       const newPagination = typeof updaterOrValue === 'function'
         ? updaterOrValue({ pageIndex: page - 1, pageSize })
@@ -749,7 +746,7 @@ export function DataTable<TData extends ExportableData, TValue>({
                           header.getContext(),
                         )}
                     {tableConfig.enableColumnResizing && header.column.getCanResize() && (
-                      <DataTableResizer header={header} table={table} />
+                      <DataTableResizer header={header} />
                     )}
                   </TableHead>
                 ))}
@@ -760,12 +757,12 @@ export function DataTable<TData extends ExportableData, TValue>({
           <TableBody>
             {isLoading ? (
               // Loading state
-              Array.from({ length: pageSize }).map((_, i) => (
+              Array.from({ length: pageSize }).map(() => (
                 <TableRow
                   key={`loading-row-${crypto.randomUUID()}`}
                   tabIndex={-1}
                 >
-                  {Array.from({ length: columns.length }).map((_, j, array) => (
+                  {Array.from({ length: columns.length }).map(() => (
                     <TableCell
                       key={`skeleton-cell-${crypto.randomUUID()}`}
                       className="px-4 py-2 truncate max-w-0 text-left"

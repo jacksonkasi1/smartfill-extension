@@ -206,7 +206,7 @@ export function useUrlState<T>(
       // Update the URL immediately
       const newParamsString = params.toString();
       router.replace(
-        `${pathname}${newParamsString ? `?${newParamsString}` : ""}`
+        `${pathname}${newParamsString ? `?${newParamsString}` : ""}` as any
       );
 
       // Clear the updating flag after URL update

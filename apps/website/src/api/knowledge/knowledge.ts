@@ -5,7 +5,7 @@ import type { CreateKnowledge } from '@/types/knowledge'
 import { knowledgeResponseSchema, knowledgeStatsSchema } from '@/types/knowledge'
 
 // ** import config
-import { httpClient } from './config'
+import { httpClient } from '../config'
 
 export async function fetchKnowledge({
   search = '',
