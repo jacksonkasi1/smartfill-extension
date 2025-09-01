@@ -46,8 +46,11 @@ interface UserRAGSettings {
 
 async function getAuthToken(): Promise<string | null> {
   try {
+    console.log('RAG Client: Context check - window.location:', typeof window !== 'undefined' ? window.location?.href : 'No window')
     console.log('RAG Client: Requesting auth token from background...')
+    
     const response = await chrome.runtime.sendMessage({ action: 'GET_AUTH_TOKEN' })
+    console.log('RAG Client: Raw response from background:', response)
     
     if (response?.success && response.token) {
       console.log('RAG Client: Token received successfully')
@@ -55,7 +58,26 @@ async function getAuthToken(): Promise<string | null> {
       console.log('RAG Client: Full token length:', response.token.length)
       return response.token
     } else {
-      console.warn('RAG Client: No token received:', response)
+      console.warn('RAG Client: No valid token in response:', response)
+      
+      // If we're in popup context, try to get from storage as fallback
+      if (typeof window !== 'undefined' && window.location?.href.includes('popup.html')) {
+        console.log('RAG Client: In popup context, trying storage fallback...')
+        try {
+          const result = await chrome.storage.local.get(['authToken', 'authTokenExpiry'])
+          if (result.authToken && result.authTokenExpiry) {
+            const now = Date.now()
+            const expiry = parseInt(result.authTokenExpiry)
+            if (now < expiry) {
+              console.log('RAG Client: Using storage token as fallback')
+              return result.authToken
+            }
+          }
+        } catch (storageError) {
+          console.error('RAG Client: Storage fallback failed:', storageError)
+        }
+      }
+      
       return null
     }
   } catch (error) {

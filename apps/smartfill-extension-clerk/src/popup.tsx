@@ -390,7 +390,33 @@ function FormFillerContent() {
     setTimeout(() => setStatusMessage(null), 4000)
   }
 
-  // Note: Auth token management is handled by the background script using Clerk client
+  // Store auth token for popup context (fallback when background script approach fails)
+  const storeAuthToken = async () => {
+    if (isSignedIn && clerk.session) {
+      try {
+        const token = await clerk.session.getToken()
+        if (token) {
+          console.log('Popup: Storing auth token for fallback use')
+          // Store token with 30-minute expiry
+          const expiryTime = Date.now() + (30 * 60 * 1000)
+          await chrome.storage.local.set({
+            authToken: token,
+            authTokenExpiry: expiryTime.toString()
+          })
+        }
+      } catch (error) {
+        console.error('Popup: Failed to store auth token:', error)
+      }
+    } else {
+      // Clear token if not signed in
+      await chrome.storage.local.remove(['authToken', 'authTokenExpiry'])
+    }
+  }
+
+  // Store auth token when user signs in or component mounts (for popup fallback)
+  useEffect(() => {
+    storeAuthToken()
+  }, [isSignedIn])
 
   const handleSignIn = () => {
     chrome.tabs.create({ url: `${ENV.CLERK_SYNC_HOST}/?auth=extension` })
