@@ -3,6 +3,7 @@ import { Context, Next } from 'hono'
 
 // ** import core packages
 import { verifyToken } from '@clerk/backend'
+import { getCookie } from 'hono/cookie'
 
 // ** import config
 import { env } from '@/config/env'
@@ -19,15 +20,21 @@ export interface AuthContext extends Context {
 export const authMiddleware = async (c: Context, next: Next): Promise<Response | void> => {
   try {
     const authHeader = c.req.header('Authorization')
-    
-    if (!authHeader?.startsWith('Bearer ')) {
-      return response.error(c, 'Missing or invalid authorization header', 401)
+    let token: string | null = null
+
+    // Try to get token from Authorization header first
+    if (authHeader?.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1]
     }
 
-    const token = authHeader.split(' ')[1]
-    
+    // If no Bearer token, try to get session token from cookies
     if (!token) {
-      return response.error(c, 'No token provided', 401)
+      // Clerk typically uses __session cookie for session tokens
+      token = getCookie(c, '__session') || getCookie(c, '__clerk_session') || getCookie(c, '_clerk_session')
+    }
+
+    if (!token) {
+      return response.error(c, 'No authentication token provided', 401)
     }
     
     // Check if this is a mock token for testing (base64 encoded 'mock-signature' = 'bW9jay1zaWduYXR1cmU=')

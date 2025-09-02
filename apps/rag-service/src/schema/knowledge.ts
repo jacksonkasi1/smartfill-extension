@@ -18,7 +18,7 @@ export const queryKnowledgeSchema = z.object({
   query: z.string().min(1, 'Query is required'),
   limit: z.number().int().min(1).max(50).default(5),
   includeMetadata: z.boolean().default(true),
-  minScore: z.number().min(0).max(1).default(0.7),
+  minScore: z.number().min(0).max(1).default(0.3),
 })
 
 export const uploadFileSchema = z.object({

@@ -12,7 +12,7 @@ export interface PaginatedResponse<T> {
   pagination: {
     page: number
     limit: number
-    total: number
-    totalPages: number
+    total_items: number
+    total_pages: number
   }
 }

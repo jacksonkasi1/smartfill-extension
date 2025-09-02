@@ -1,4 +1,7 @@
+// ** import core packages
 import React, { useState, useEffect } from "react"
+
+// ** import third party
 import {
   ClerkProvider,
   SignedIn,
@@ -7,12 +10,19 @@ import {
   useClerk
 } from "@clerk/chrome-extension"
 
+// ** import config
+import { ENV } from "@/config/env"
+
+// ** import apis
+import { ragClient } from "@/api/rag"
+
+// ** import styles
 import "./styles/index.css"
 
-// Import assets
+// ** import assets
 import iconUrl from "data-base64:~assets/icons/icon.png"
 
-// Import icons from ts-icons
+// ** import icons
 import { 
   DownloadIcon, 
   UploadIcon, 
@@ -27,34 +37,67 @@ import {
   StopIcon
 } from "./assets/ts-icons"
 
-const PUBLISHABLE_KEY = process.env.PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY!
 const EXTENSION_URL = chrome.runtime.getURL(".")
-const SYNC_HOST = process.env.PLASMO_PUBLIC_CLERK_SYNC_HOST
-
-if (!PUBLISHABLE_KEY) {
-  throw new Error("Please add the PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY to the .env.development file")
-}
 
 function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
   const [apiKey, setApiKey] = useState('')
   const [keyStatus, setKeyStatus] = useState<{ message: string, type: 'success' | 'error' | null }>({ message: '', type: null })
   const [isLoading, setIsLoading] = useState(false)
+  
+  // RAG Settings
+  const [ragEnabled, setRagEnabled] = useState(true)
+  const [autoRag, setAutoRag] = useState(true)
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [availableTags, setAvailableTags] = useState<string[]>([])
+  const [ragStatus, setRagStatus] = useState<{ message: string, type: 'success' | 'error' | null }>({ message: '', type: null })
+  const [tagsLoading, setTagsLoading] = useState(false)
 
-  // Load existing API key on mount
+  // Load existing API key and RAG settings on mount
   useEffect(() => {
     if (isOpen) {
-      loadApiKey()
+      loadSettings()
     }
   }, [isOpen])
 
-  const loadApiKey = async () => {
+  const loadSettings = async () => {
     try {
-      const result = await chrome.storage.sync.get(['geminiApiKey'])
+      const result = await chrome.storage.sync.get([
+        'geminiApiKey', 
+        'ragEnabled', 
+        'autoRag', 
+        'selectedTags'
+      ])
+      
       if (result.geminiApiKey) {
         setApiKey(result.geminiApiKey)
       }
+      if (result.ragEnabled !== undefined) {
+        setRagEnabled(result.ragEnabled)
+      }
+      if (result.autoRag !== undefined) {
+        setAutoRag(result.autoRag)
+      }
+      if (result.selectedTags) {
+        setSelectedTags(result.selectedTags)
+      }
+
+      // Load available tags from the backend
+      await loadAvailableTags()
     } catch (error) {
-      console.error('Failed to load API key:', error)
+      console.error('Failed to load settings:', error)
+    }
+  }
+
+  const loadAvailableTags = async () => {
+    setTagsLoading(true)
+    try {
+      const tags = await ragClient.getAvailableTags()
+      setAvailableTags(tags)
+    } catch (error) {
+      console.error('Failed to load available tags:', error)
+      setAvailableTags([])
+    } finally {
+      setTagsLoading(false)
     }
   }
 
@@ -78,6 +121,36 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
       setKeyStatus({ message: 'Failed to save API key', type: 'error' })
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const saveRagSettings = async () => {
+    setIsLoading(true)
+    try {
+      await chrome.storage.sync.set({ 
+        ragEnabled, 
+        autoRag, 
+        selectedTags
+      })
+      setRagStatus({ message: 'Knowledge settings saved successfully!', type: 'success' })
+      
+      // Clear status after 3 seconds
+      setTimeout(() => {
+        setRagStatus({ message: '', type: null })
+      }, 3000)
+    } catch (error) {
+      console.error('Save RAG settings error:', error)
+      setRagStatus({ message: 'Failed to save knowledge settings', type: 'error' })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const toggleTag = (tag: string) => {
+    if (selectedTags.includes(tag)) {
+      setSelectedTags(selectedTags.filter(t => t !== tag))
+    } else {
+      setSelectedTags([...selectedTags, tag])
     }
   }
 
@@ -117,6 +190,79 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
               <div className={`key-status ${keyStatus.type}`}>
                 {keyStatus.message}
               </div>
+            )}
+          </div>
+
+          {/* RAG Knowledge Settings */}
+          <div className="setting-group">
+            <h3>Knowledge Settings</h3>
+            <p className="setting-description">Configure how AI uses your knowledge base for form filling</p>
+            
+            <div className="setting-row">
+              <label className="checkbox-label">
+                <input 
+                  type="checkbox" 
+                  checked={ragEnabled}
+                  onChange={(e) => setRagEnabled(e.target.checked)}
+                />
+                <span>Enable knowledge search</span>
+              </label>
+            </div>
+
+            {ragEnabled && (
+              <>
+                <div className="setting-row">
+                  <label className="checkbox-label">
+                    <input 
+                      type="checkbox" 
+                      checked={autoRag}
+                      onChange={(e) => setAutoRag(e.target.checked)}
+                    />
+                    <span>Auto-select relevant knowledge (recommended)</span>
+                  </label>
+                </div>
+
+                {!autoRag && (
+                  <div className="setting-row">
+                    <h4>Knowledge Tags</h4>
+                    <p className="setting-subdescription">Select which types of knowledge to use:</p>
+                    {tagsLoading ? (
+                      <div className="tags-loading">Loading tags...</div>
+                    ) : availableTags.length > 0 ? (
+                      <div className="tags-container">
+                        {availableTags.map(tag => (
+                          <button
+                            key={tag}
+                            type="button"
+                            className={`tag-btn ${selectedTags.includes(tag) ? 'selected' : ''}`}
+                            onClick={() => toggleTag(tag)}
+                          >
+                            {tag}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="no-tags">No tags available. Add some knowledge with tags first.</div>
+                    )}
+                  </div>
+                )}
+
+                <div className="input-group">
+                  <button 
+                    className="save-btn" 
+                    onClick={saveRagSettings}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? 'Saving...' : 'Save Knowledge Settings'}
+                  </button>
+                </div>
+
+                {ragStatus.message && (
+                  <div className={`key-status ${ragStatus.type}`}>
+                    {ragStatus.message}
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -173,19 +319,16 @@ function UserProfileModal({ isOpen, onClose, user }: { isOpen: boolean, onClose:
   
   const handleSignOut = async () => {
     try {
-      // Try to sign out directly using Clerk
       await signOut({
-        redirectUrl: 'http://localhost:3000/?signout=extension'
+        redirectUrl: `${ENV.CLERK_SYNC_HOST}/?signout=extension`
       })
       onClose()
     } catch (error) {
-      // Fallback: redirect to website for logout
       chrome.tabs.create({ 
-        url: 'http://localhost:3000/?signout=extension',
+        url: `${ENV.CLERK_SYNC_HOST}/?signout=extension`,
         active: true
       })
       onClose()
-      // Close the extension popup after redirecting
       window.close()
     }
   }
@@ -230,9 +373,10 @@ function UserProfileModal({ isOpen, onClose, user }: { isOpen: boolean, onClose:
 
 function FormFillerContent() {
   const { user, isSignedIn } = useUser()
+  const clerk = useClerk()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [userProfileOpen, setUserProfileOpen] = useState(false)
-  const [currentPage, setCurrentPage] = useState('formFill') // 'formFill' or 'recordSession'
+  const [currentPage, setCurrentPage] = useState('formFill')
   const [promptText, setPromptText] = useState('')
   const [isFormFilling, setIsFormFilling] = useState(false)
   const [statusMessage, setStatusMessage] = useState<{text: string, type: 'success' | 'error' | 'info'} | null>(null)
@@ -246,9 +390,37 @@ function FormFillerContent() {
     setTimeout(() => setStatusMessage(null), 4000)
   }
 
+  // Store auth token for popup context (fallback when background script approach fails)
+  const storeAuthToken = async () => {
+    if (isSignedIn && clerk.session) {
+      try {
+        const token = await clerk.session.getToken()
+        if (token) {
+          console.log('Popup: Storing auth token for fallback use')
+          // Store token with 30-minute expiry
+          const expiryTime = Date.now() + (30 * 60 * 1000)
+          await chrome.storage.local.set({
+            authToken: token,
+            authTokenExpiry: expiryTime.toString()
+          })
+        }
+      } catch (error) {
+        console.error('Popup: Failed to store auth token:', error)
+      }
+    } else {
+      // Clear token if not signed in
+      await chrome.storage.local.remove(['authToken', 'authTokenExpiry'])
+    }
+  }
+
+  // Store auth token when user signs in or component mounts (for popup fallback)
+  useEffect(() => {
+    storeAuthToken()
+  }, [isSignedIn])
+
   const handleSignIn = () => {
-    // Open website with auth trigger
-    chrome.tabs.create({ url: 'http://localhost:3000/?auth=extension' })
+    chrome.tabs.create({ url: `${ENV.CLERK_SYNC_HOST}/?auth=extension` })
+    window.close()
   }
 
 
@@ -256,7 +428,7 @@ function FormFillerContent() {
     if (isFormFilling) return // Prevent multiple clicks
     
     setIsFormFilling(true)
-    setStatusMessage({ text: 'Processing with AI...', type: 'info' })
+    setStatusMessage({ text: 'Initializing...', type: 'info' })
     
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
@@ -288,10 +460,22 @@ function FormFillerContent() {
         }
       }
 
+      // Listen for status updates from content script
+      const statusListener = (message: any) => {
+        if (message.action === 'STATUS_UPDATE' && message.status) {
+          setStatusMessage({ text: message.status, type: 'info' })
+        }
+      }
+      
+      chrome.runtime.onMessage.addListener(statusListener)
+
       const response = await chrome.tabs.sendMessage(tab.id, { 
         action: "fillForms", 
         prompt: promptText 
       })
+
+      // Remove listener after completion
+      chrome.runtime.onMessage.removeListener(statusListener)
 
       if (response?.success) {
         const filled = response.filled || 0
@@ -453,11 +637,11 @@ function FormFillerContent() {
 function IndexPopup() {
   return (
     <ClerkProvider
-      publishableKey={PUBLISHABLE_KEY}
+      publishableKey={ENV.CLERK_PUBLISHABLE_KEY}
       afterSignOutUrl={`${EXTENSION_URL}/popup.html`}
       signInFallbackRedirectUrl={`${EXTENSION_URL}/popup.html`}
       signUpFallbackRedirectUrl={`${EXTENSION_URL}/popup.html`}
-      syncHost={SYNC_HOST}
+      syncHost={ENV.CLERK_SYNC_HOST}
     >
       <FormFillerContent />
     </ClerkProvider>

@@ -28,6 +28,6 @@ app.route('/knowledge', knowledgeRemove)
 app.route('/knowledge', knowledgeUpload)
 
 // Mount webhook routes
-app.route('/webhooks/clerk', webhookClerk)
+app.route('/webhook/clerk', webhookClerk)
 
 export default app

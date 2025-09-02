@@ -33,8 +33,8 @@ export const response = {
       pagination: {
         page,
         limit,
-        total,
-        totalPages: Math.ceil(total / limit),
+        total_items: total,
+        total_pages: Math.ceil(total / limit),
       },
     } as PaginatedResponse<T>, status as any)
   },

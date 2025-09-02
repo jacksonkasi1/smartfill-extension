@@ -125,9 +125,10 @@ export class KnowledgeService {
     const existing = await this.getKnowledgeById(userId, id)
     if (!existing) return null
 
-    if (updates.content) {
-      const sanitizedContent = TextProcessor.sanitizeText(updates.content)
-      const chunks = TextProcessor.chunkText(sanitizedContent)
+    // Re-vectorize if content OR title changes
+    if (updates.content || updates.title) {
+      const newContent = updates.content ? TextProcessor.sanitizeText(updates.content) : existing.content
+      const chunks = TextProcessor.chunkText(newContent)
 
       await this.vectorService.updateKnowledgeChunks(
         userId,
@@ -179,7 +180,7 @@ export class KnowledgeService {
       minScore?: number
     } = {}
   ): Promise<QueryResult[]> {
-    const { limit = 5, minScore = 0.7 } = options
+    const { limit = 5, minScore = 0.3 } = options
 
     const results = await this.vectorService.queryKnowledge(userId, query, {
       topK: limit,
@@ -198,5 +199,53 @@ export class KnowledgeService {
         type: result.metadata?.type || 'text',
       },
     }))
+  }
+
+  async getKnowledgeStats(userId: string): Promise<{ 
+    total: number; 
+    recent: number; 
+    uniqueTags: string[];
+    averageLength: number;
+    lastUpdated: string;
+  }> {
+    // Get total count and all data for stats calculation
+    const userKnowledge = await db
+      .select()
+      .from(knowledge)
+      .where(eq(knowledge.userId, userId))
+
+    const total = userKnowledge.length
+    
+    // Calculate recent count (last 7 days)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    const recent = userKnowledge.filter(k => 
+      new Date(k.updatedAt) >= sevenDaysAgo
+    ).length
+
+    // Extract unique tags
+    const allTags = userKnowledge.flatMap(k => 
+      Array.isArray(k.tags) ? k.tags : (k.tags ? JSON.parse(k.tags as string) : [])
+    )
+    const uniqueTags = [...new Set(allTags)].filter(Boolean)
+
+    // Calculate average content length
+    const averageLength = total > 0 
+      ? Math.round(userKnowledge.reduce((sum, k) => sum + k.content.length, 0) / total)
+      : 0
+
+    // Find last updated timestamp
+    const lastUpdated = userKnowledge.length > 0
+      ? userKnowledge.reduce((latest, k) => 
+          new Date(k.updatedAt) > new Date(latest.updatedAt) ? k : latest
+        ).updatedAt
+      : new Date().toISOString()
+
+    return {
+      total,
+      recent,
+      uniqueTags,
+      averageLength,
+      lastUpdated: typeof lastUpdated === 'string' ? lastUpdated : lastUpdated.toISOString(),
+    }
   }
 }

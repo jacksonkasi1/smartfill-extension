@@ -67,28 +67,117 @@ app.onError((err, c) => {
   return response.error(c, 'Validation error', 400, err)
 })
 
+// File upload endpoint
+app.post('/upload', async (c) => {
+  const userId = c.get('userId')
+
+  try {
+    const body = await c.req.parseBody()
+    const file = body.file as File
+    const title = body.title as string
+
+    if (!file) {
+      return response.error(c, 'No file provided', 400)
+    }
+
+    if (!title) {
+      return response.error(c, 'No title provided', 400)
+    }
+
+    // Check if it's a text file
+    if (file.type !== 'text/plain') {
+      return response.error(c, 'Only .txt files are supported', 400)
+    }
+
+    // Read file content
+    const content = await file.text()
+
+    if (!content.trim()) {
+      return response.error(c, 'File is empty', 400)
+    }
+
+    // Create knowledge entry
+    const knowledge = await knowledgeService.createKnowledge({
+      userId,
+      title,
+      content: content.trim(),
+      type: 'file',
+      tags: [],
+    })
+
+    return response.success(c, knowledge, 'File uploaded successfully', 201)
+  } catch (error) {
+    console.error('File upload error:', error)
+    return response.error(c, 'Failed to upload file', 500, error)
+  }
+})
+
+// Knowledge statistics endpoint
+app.get('/stats', async (c) => {
+  const userId = c.get('userId')
+
+  try {
+    const stats = await knowledgeService.getKnowledgeStats(userId)
+    return response.success(c, stats, 'Knowledge statistics retrieved')
+  } catch (error) {
+    console.error('Stats error:', error)
+    return response.error(c, 'Failed to get knowledge statistics', 500, error)
+  }
+})
+
+// Delete knowledge endpoint
+app.delete('/:id', async (c) => {
+  const userId = c.get('userId')
+  const knowledgeId = c.req.param('id')
+
+  try {
+    await knowledgeService.deleteKnowledge(userId, knowledgeId)
+    return response.success(c, null, 'Knowledge deleted successfully')
+  } catch (error) {
+    console.error('Delete knowledge error:', error)
+    return response.error(c, 'Failed to delete knowledge', 500, error)
+  }
+})
+
 app.post('/query', async (c) => {
+  const timestamp = new Date().toISOString()
+  const userAgent = c.req.header('User-Agent') || 'Unknown'
+  
+  console.log('\n🔍🔍🔍 RAG QUERY REQUEST RECEIVED 🔍🔍🔍')
+  console.log(`⏰ Timestamp: ${timestamp}`)
+  console.log(`🌐 User-Agent: ${userAgent}`)
+  console.log(`📍 Source: ${c.req.header('Origin') || 'Unknown'}`)
+  
   const body = await c.req.json()
-  console.log('Raw query request body:', JSON.stringify(body, null, 2))
+  console.log('📝 Query request body:', JSON.stringify(body, null, 2))
   
   // Manual validation to see what's failing
   const validation = queryKnowledgeSchema.safeParse(body)
   if (!validation.success) {
-    console.error('Query validation failed:', validation.error.issues)
+    console.error('❌ Query validation failed:', validation.error.issues)
     return response.error(c, 'Query validation failed', 400, validation.error.issues)
   }
   
   const { query, limit, minScore } = validation.data
   const userId = c.get('userId')
 
+  console.log(`👤 User ID: ${userId}`)
+  console.log(`🔍 Search Query: "${query}"`)
+  console.log(`📊 Limit: ${limit}, Min Score: ${minScore}`)
+
   try {
     const results = await knowledgeService.queryKnowledge(userId, query, {
       limit,
       minScore,
     })
+    
+    console.log(`✅ Query completed - Found ${results.length} results`)
+    console.log('🔍🔍🔍 END RAG QUERY REQUEST 🔍🔍🔍\n')
+    
     return response.success(c, results, `Found ${results.length} relevant results`)
   } catch (error) {
-    console.error('Query knowledge error:', error)
+    console.error('❌ Query knowledge error:', error)
+    console.log('🔍🔍🔍 END RAG QUERY REQUEST (ERROR) 🔍🔍🔍\n')
     return response.error(c, 'Failed to query knowledge', 500, error)
   }
 })
