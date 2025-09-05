@@ -74,7 +74,7 @@ async function sendStatusUpdate(status: string, delay: number = 300) {
       await new Promise(resolve => setTimeout(resolve, delay))
     }
   } catch (error) {
-    console.log('Could not send status update:', error)
+    // Could not send status update - this is expected in some contexts
   }
 }
 
@@ -139,12 +139,10 @@ async function fillForms(customPrompt?: string): Promise<FillResult> {
           }
         } else {
           await sendStatusUpdate('❌ Knowledge search failed', 400)
-          console.error('RAG enhancement failed:', response ? response.error : 'No response from background')
           enhancedPrompt = (response && response.fallbackPrompt) || customPrompt || ''
         }
       } catch (error) {
         await sendStatusUpdate('❌ Knowledge search failed', 400)
-        console.error('RAG communication failed:', error)
         enhancedPrompt = customPrompt || ''
       }
     }

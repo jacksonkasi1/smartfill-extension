@@ -72,9 +72,7 @@ export function ExtensionOpener() {
           }
         }
 
-        console.log('SmartFill: Triggered extension opening for user:', user.id)
       } catch (error) {
-        console.log('SmartFill: Could not trigger extension opening:', error)
       }
     }
   }, [searchParams, isSignedIn, user, router])

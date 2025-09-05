@@ -13,28 +13,15 @@ import { ragClient } from '@/services/rag'
 // Create Clerk client for background script
 async function getClerkToken(): Promise<string | null> {
   try {
-    console.log('Background: Creating Clerk client...')
     const clerk = await createClerkClient({
       publishableKey: ENV.CLERK_PUBLISHABLE_KEY
     })
     
-    console.log('Background: Clerk client created, checking session...')
     if (!clerk.session) {
-      console.warn('Background: No Clerk session available')
       return null
     }
     
-    console.log('Background: Getting token from session...')
     const token = await clerk.session.getToken()
-    
-    if (token) {
-      console.log('Background: Token retrieved successfully')
-      console.log('Background: Token preview:', token.substring(0, 50) + '...')
-      console.log('Background: Full token length:', token.length)
-    } else {
-      console.warn('Background: Token is null/empty')
-    }
-    
     return token
   } catch (error) {
     console.error('Background: Failed to get Clerk token:', error)
@@ -70,15 +57,12 @@ chrome.runtime.onMessage.addListener(
 
     if (message.action === 'GET_AUTH_TOKEN') {
       try {
-        console.log('Background: GET_AUTH_TOKEN request received')
         const token = await getClerkToken()
         
         if (token) {
-          console.log('Background: Returning token to requester')
           return { success: true, token }
         }
         
-        console.log('Background: No token available, returning error')
         return { success: false, error: 'No valid auth token available' }
       } catch (error) {
         console.error('Background: GET_AUTH_TOKEN error:', error)

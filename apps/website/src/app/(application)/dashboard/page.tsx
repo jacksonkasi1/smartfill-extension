@@ -1,6 +1,6 @@
 // ** import core packages
 'use client'
-import React, { useState } from 'react'
+import React, { useState, Suspense } from 'react'
 
 // ** import icons
 import { FileText, Brain, Clock, Upload } from 'lucide-react'
@@ -78,7 +78,9 @@ export default function Dashboard() {
               </Button>
             </div>
             
-            <KnowledgeTable />
+            <Suspense fallback={<div className="flex justify-center py-8">Loading...</div>}>
+              <KnowledgeTable />
+            </Suspense>
           </div>
 
           <KnowledgeUploadModal 

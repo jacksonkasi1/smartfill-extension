@@ -1,6 +1,17 @@
 // ** import types
 import { randomUUID } from 'crypto'
 
+interface ChunkRow {
+  id: string
+  content: string
+  knowledge_id: string
+  chunk_index: string | number
+  embedding: number[] | string
+  title: string
+  tags: string[] | string
+  knowledge_type: 'text' | 'file'
+}
+
 // ** import core packages
 import { OpenAI } from 'openai'
 
@@ -72,7 +83,7 @@ export class VectorService {
 
     // Calculate cosine similarity in-memory
     const results = chunks.rows
-      .map((chunk: any) => {
+      .map((chunk: ChunkRow) => {
         const chunkEmbedding = Array.isArray(chunk.embedding) ? chunk.embedding : JSON.parse(chunk.embedding as string)
         const similarity = this.cosineSimilarity(queryEmbedding, chunkEmbedding)
         return {
@@ -81,7 +92,7 @@ export class VectorService {
           content: chunk.content,
           metadata: {
             knowledgeId: chunk.knowledge_id,
-            chunkIndex: parseInt(chunk.chunk_index),
+            chunkIndex: parseInt(String(chunk.chunk_index)),
             title: chunk.title,
             tags: Array.isArray(chunk.tags) ? chunk.tags : JSON.parse(chunk.tags || '[]'),
             type: chunk.knowledge_type,
@@ -129,14 +140,12 @@ export class VectorService {
   private async generateEmbedding(text: string): Promise<number[]> {
     if (this.openai) {
       try {
-        console.log('🧠 Generating OpenAI embedding for text:', text.substring(0, 100) + '...')
         const response = await this.openai.embeddings.create({
           model: 'text-embedding-3-small', // Fast and cost-effective model
           input: text,
         })
         
         const embedding = response.data[0].embedding
-        console.log(`✅ Generated OpenAI embedding with ${embedding.length} dimensions`)
         return embedding
       } catch (error) {
         console.error('❌ OpenAI embedding failed, falling back to mock:', error.message)
@@ -144,7 +153,6 @@ export class VectorService {
       }
     }
     
-    console.log('⚠️  Using mock embeddings (OPENAI_API_KEY not configured)')
     return this.generateMockEmbedding(text)
   }
 

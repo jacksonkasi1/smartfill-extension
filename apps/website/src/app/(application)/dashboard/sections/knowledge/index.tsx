@@ -2,21 +2,18 @@
 
 // ** import components
 import { DataTable } from "@/components/data-table/data-table"
+import { ToolbarOptions } from "./components/toolbar-options"
 
 // ** import utils
 import { getColumns } from "./components/columns"
 import { useExportConfig } from "./utils/config"
 import { useKnowledgeData } from "./utils/data-fetching"
 
-// ** import components
-import { ToolbarOptions } from "./components/toolbar-options"
-
 
 export default function KnowledgeTable() {
-  const fetchKnowledgeByIds = async (ids: (string | number)[]) => {
+  const fetchKnowledgeByIds = async (_ids: (string | number)[]) => {
     // This function would fetch knowledge items by their IDs
     // For now, return empty array - implement as needed
-    console.log("Fetching knowledge by IDs:", ids)
     return []
   }
 

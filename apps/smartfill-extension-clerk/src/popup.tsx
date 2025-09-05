@@ -396,7 +396,6 @@ function FormFillerContent() {
       try {
         const token = await clerk.session.getToken()
         if (token) {
-          console.log('Popup: Storing auth token for fallback use')
           // Store token with 30-minute expiry
           const expiryTime = Date.now() + (30 * 60 * 1000)
           await chrome.storage.local.set({
