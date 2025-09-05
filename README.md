@@ -53,13 +53,18 @@ bun run build
 ### Browser Extension (`apps/smartfill-extension-clerk`)
 - Built with **Plasmo** framework
 - **Clerk** authentication integration
+- **Google Gemini AI** for form data generation
 - Chrome extension with form-filling capabilities
-- TypeScript + React
+- **TypeScript** + **React**
 
 ### Website (`apps/website`) 
 - **Next.js 15** application
 - **Clerk** authentication
 - **Radix UI** components with **Tailwind CSS**
+- **TanStack Query** for server state management
+- **TanStack Table** for data tables
+- **React Hook Form** with **Zod** validation
+- **Motion** for animations
 - **TypeScript** support
 
 ### RAG Service (`apps/rag-service`)
@@ -67,14 +72,46 @@ bun run build
 - **Drizzle ORM** with **TiDB** database
 - **TiDB Vector** for RAG embeddings storage
 - **OpenAI** embeddings and completions
+- **Zod** schema validation
+- **Svix** webhooks
+- **MySQL2** database driver
 - User-specific knowledge management
 - **TypeScript** with ESM support
 
+## Tech Stack Summary
+
+### Frontend Technologies
+- **React 18** - UI library
+- **Next.js 15** - React framework
+- **TypeScript** - Type safety
+- **Tailwind CSS** - Styling
+- **Radix UI** - Component library
+- **Motion** - Animation library
+
+### Backend Technologies  
+- **Hono** - Web framework
+- **Drizzle ORM** - Database ORM
+- **TiDB** - Database with vector support
+- **MySQL2** - Database driver
+- **Zod** - Schema validation
+
+### AI & Authentication
+- **OpenAI** - Embeddings and completions
+- **Google Gemini AI** - Form data generation
+- **Clerk** - Authentication service
+
+### Development Tools
+- **Plasmo** - Browser extension framework
+- **Bun** - Package manager and runtime
+- **Turbo** - Monorepo build system
+- **ESLint** - Code linting
+- **Svix** - Webhook management
+
 ## Features
 
-- **AI-Powered Form Filling** - Intelligent form completion using RAG
+- **AI-Powered Form Filling** - Intelligent form completion using Gemini AI and RAG
 - **User Authentication** - Secure login with Clerk across all apps
-- **Knowledge Management** - Personal RAG service for each user
+- **Knowledge Management** - Personal RAG service for each user with vector embeddings
 - **Cross-platform** - Browser extension + web dashboard
 - **Type-safe** - Full TypeScript support across all apps
 
