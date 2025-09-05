@@ -115,6 +115,45 @@ bun run build
 - **Cross-platform** - Browser extension + web dashboard
 - **Type-safe** - Full TypeScript support across all apps
 
+## How we built it - Multi-Step Agent Architecture
+
+Our SmartFill agent chains together these automated steps:
+
+1. **Data Ingestion & Indexing (TiDB Vector)**
+   - Captures form data and user sessions
+   - Generates embeddings via OpenAI API
+   - Stores vectors in TiDB Serverless for semantic search
+
+2. **Intelligent Search & Retrieval**
+   - Vector similarity search in TiDB for relevant form data
+   - Full-text search for exact matches
+   - RAG pipeline combines both for context
+
+3. **LLM Chain Processing**
+   - OpenAI for embedding generation
+   - Gemini for form field interpretation
+   - Multi-model approach for accuracy
+
+4. **External Tool Integration**
+   - Clerk API for authentication
+   - Browser automation APIs
+   - Session replay engine
+
+5. **Automated Workflow Execution**
+   - End-to-end: Form detection → Context retrieval → AI processing → Auto-fill → Validation
+   - All steps execute automatically without user intervention
+
+## Why TiDB?
+
+SmartFill leverages TiDB Serverless for:
+- Vector embeddings storage with lightning-fast retrieval
+- Hybrid search combining semantic and keyword matching
+- Scalable, serverless architecture
+- Multi-tenant data isolation
+
+## Impact
+
+SmartFill makes web automation accessible to everyone, particularly helping users with disabilities, elderly individuals, and small businesses automate tedious form-filling tasks & Q&A.
 
 ---
 
