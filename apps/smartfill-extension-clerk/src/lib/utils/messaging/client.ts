@@ -1,4 +1,7 @@
+// ** import types
 import type { MessagingTypes, MessageAction } from "./types"
+
+// ** import constants
 import { MESSAGE_ACTIONS } from "./types"
 
 /**

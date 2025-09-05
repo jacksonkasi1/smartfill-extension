@@ -19,7 +19,6 @@ export function AuthExtensionHandler() {
     
     // Handle sign-out request from extension
     if (signoutParam === 'extension' && isSignedIn) {
-      console.log('SmartFill: Website received sign-out request from extension')
       // Clear the URL parameter first
       router.replace('/')
       
@@ -27,7 +26,6 @@ export function AuthExtensionHandler() {
       signOut({
         redirectUrl: '/'
       }).then(() => {
-        console.log('SmartFill: Website sign-out completed')
       }).catch((error) => {
         console.error('SmartFill: Website sign-out failed:', error)
       })
