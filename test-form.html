@@ -4,128 +4,457 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SmartFill RAG Test Form</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 600px;
-            margin: 50px auto;
-            padding: 20px;
-            background-color: #f5f5f5;
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        linkedin: '#0077b5',
+                        linkedinHover: '#005885'
+                    }
+                }
+            }
         }
-        .form-container {
-            background: white;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        h1 {
-            color: #333;
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        .form-group {
-            margin-bottom: 20px;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-            color: #555;
-        }
-        input, textarea, select {
-            width: 100%;
-            padding: 10px;
-            border: 2px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-            box-sizing: border-box;
-        }
-        input:focus, textarea:focus, select:focus {
-            outline: none;
-            border-color: #4CAF50;
-        }
-        .submit-btn {
-            background-color: #4CAF50;
-            color: white;
-            padding: 12px 30px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            width: 100%;
-            margin-top: 20px;
-        }
-        .submit-btn:hover {
-            background-color: #45a049;
-        }
-        .note {
-            background-color: #e7f3ff;
-            border: 1px solid #b3d9ff;
-            padding: 15px;
-            border-radius: 4px;
-            margin-bottom: 20px;
-        }
-    </style>
+    </script>
 </head>
-<body>
-    <div class="form-container">
-        <h1>🤖 SmartFill RAG Test Form</h1>
-        
-        <div class="note">
-            <strong>Instructions:</strong> This form is designed to test the RAG (Retrieval-Augmented Generation) integration. 
-            The SmartFill extension should now search your knowledge base for relevant information before filling the form.
-            Open the browser console to see the RAG search process in action!
+<body class="bg-gray-50 min-h-screen">
+    <div class="max-w-4xl mx-auto py-8 px-4">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">🤖 SmartFill Job Application</h1>
+            <p class="text-gray-600">Professional job application form with smart filling capabilities</p>
         </div>
 
-        <form id="testForm">
-            <div class="form-group">
-                <label for="fullName">Full Name:</label>
-                <input type="text" id="fullName" name="fullName" placeholder="Enter your full name">
+        <!-- Info Banner -->
+        <div class="bg-blue-50 border-l-4 border-linkedin p-4 mb-8 rounded-r-lg">
+            <div class="flex items-start">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-linkedin mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-linkedin">RAG Integration Test</h3>
+                    <p class="text-sm text-gray-700 mt-1">This form tests the RAG integration. SmartFill will search your knowledge base for relevant information. Check the browser console to see the process in action!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="border-b border-gray-200">
+                <nav class="-mb-px flex" aria-label="Tabs">
+                    <button onclick="switchTab('simple')" id="simpleTab" class="tab-button active w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm focus:outline-none focus:ring-0">
+                        Simple Application
+                    </button>
+                    <button onclick="switchTab('complex')" id="complexTab" class="tab-button w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm focus:outline-none focus:ring-0">
+                        Detailed Application
+                    </button>
+                </nav>
             </div>
 
-            <div class="form-group">
-                <label for="email">Email Address:</label>
-                <input type="email" id="email" name="email" placeholder="Enter your email address">
+            <!-- Simple Form Tab -->
+            <div id="simpleForm" class="tab-content p-8">
+                <form id="simpleJobForm" class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="firstName" class="block text-sm font-medium text-gray-700 mb-2">First Name</label>
+                            <input type="text" id="firstName" name="firstName" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-linkedin transition-colors" placeholder="John">
+                        </div>
+                        <div>
+                            <label for="lastName" class="block text-sm font-medium text-gray-700 mb-2">Last Name</label>
+                            <input type="text" id="lastName" name="lastName" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-linkedin transition-colors" placeholder="Doe">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="email" class="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+                        <input type="email" id="email" name="email" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-linkedin transition-colors" placeholder="john.doe@example.com">
+                    </div>
+
+                    <div>
+                        <label for="phone" class="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
+                        <input type="tel" id="phone" name="phone" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-linkedin transition-colors" placeholder="+1 (555) 123-4567">
+                    </div>
+
+                    <div>
+                        <label for="position" class="block text-sm font-medium text-gray-700 mb-2">Position Applied For</label>
+                        <select id="position" name="position" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-linkedin transition-colors">
+                            <option value="">Select a position</option>
+                            <option value="software-engineer">Software Engineer</option>
+                            <option value="product-manager">Product Manager</option>
+                            <option value="data-scientist">Data Scientist</option>
+                            <option value="ui-designer">UI/UX Designer</option>
+                            <option value="marketing-manager">Marketing Manager</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="experience" class="block text-sm font-medium text-gray-700 mb-2">Years of Experience</label>
+                        <select id="experience" name="experience" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-linkedin transition-colors">
+                            <option value="">Select experience level</option>
+                            <option value="0-1">0-1 years</option>
+                            <option value="2-5">2-5 years</option>
+                            <option value="6-10">6-10 years</option>
+                            <option value="10+">10+ years</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="coverLetter" class="block text-sm font-medium text-gray-700 mb-2">Cover Letter</label>
+                        <textarea id="coverLetter" name="coverLetter" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-linkedin transition-colors" placeholder="Tell us why you're interested in this position..."></textarea>
+                    </div>
+
+                    <button type="submit" class="w-full bg-linkedin hover:bg-linkedinHover text-white font-medium py-3 px-4 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-linkedin">
+                        Submit Application
+                    </button>
+                </form>
             </div>
 
-            <div class="form-group">
-                <label for="phone">Phone Number:</label>
-                <input type="tel" id="phone" name="phone" placeholder="Enter your phone number">
-            </div>
+            <!-- Complex Form Tab -->
+            <div id="complexForm" class="tab-content hidden p-8">
+                <form id="complexJobForm" class="space-y-8">
+                    <!-- Personal Information Section -->
+                    <div class="bg-gray-50 p-6 rounded-lg">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Personal Information</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label for="fullName" class="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
+                                <input type="text" id="fullName" name="fullName" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-linkedin transition-colors">
+                            </div>
+                            <div>
+                                <label for="emailComplex" class="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                                <input type="email" id="emailComplex" name="emailComplex" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-linkedin transition-colors">
+                            </div>
+                            <div>
+                                <label for="phoneComplex" class="block text-sm font-medium text-gray-700 mb-2">Phone</label>
+                                <input type="tel" id="phoneComplex" name="phoneComplex" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-linkedin transition-colors">
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                            <div>
+                                <label for="linkedin" class="block text-sm font-medium text-gray-700 mb-2">LinkedIn Profile</label>
+                                <input type="url" id="linkedin" name="linkedin" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-linkedin transition-colors" placeholder="https://linkedin.com/in/username">
+                            </div>
+                            <div>
+                                <label for="portfolio" class="block text-sm font-medium text-gray-700 mb-2">Portfolio Website</label>
+                                <input type="url" id="portfolio" name="portfolio" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-linkedin transition-colors" placeholder="https://yourportfolio.com">
+                            </div>
+                        </div>
+                    </div>
 
-            <div class="form-group">
-                <label for="company">Company:</label>
-                <input type="text" id="company" name="company" placeholder="Enter your company name">
-            </div>
+                    <!-- Professional Experience Section -->
+                    <div class="bg-gray-50 p-6 rounded-lg">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-semibold text-gray-900">Professional Experience</h3>
+                            <button type="button" onclick="openExperienceModal()" class="bg-linkedin hover:bg-linkedinHover text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                Add Experience
+                            </button>
+                        </div>
+                        <div id="experienceList" class="space-y-3">
+                            <div class="text-gray-500 text-sm italic">No experience added yet. Click "Add Experience" to get started.</div>
+                        </div>
+                    </div>
 
-            <div class="form-group">
-                <label for="jobTitle">Job Title:</label>
-                <input type="text" id="jobTitle" name="jobTitle" placeholder="Enter your job title">
-            </div>
+                    <!-- Skills Section -->
+                    <div class="bg-gray-50 p-6 rounded-lg">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-semibold text-gray-900">Skills & Technologies</h3>
+                            <button type="button" onclick="openSkillsModal()" class="bg-linkedin hover:bg-linkedinHover text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                Manage Skills
+                            </button>
+                        </div>
+                        <div id="skillsList" class="flex flex-wrap gap-2">
+                            <div class="text-gray-500 text-sm italic">No skills added yet. Click "Manage Skills" to add your expertise.</div>
+                        </div>
+                    </div>
 
-            <div class="form-group">
-                <label for="address">Address:</label>
-                <textarea id="address" name="address" rows="3" placeholder="Enter your address"></textarea>
-            </div>
+                    <!-- Education Section -->
+                    <div class="bg-gray-50 p-6 rounded-lg">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Education</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="university" class="block text-sm font-medium text-gray-700 mb-2">University/Institution</label>
+                                <input type="text" id="university" name="university" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-linkedin transition-colors">
+                            </div>
+                            <div>
+                                <label for="degree" class="block text-sm font-medium text-gray-700 mb-2">Degree</label>
+                                <input type="text" id="degree" name="degree" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-linkedin transition-colors">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                            <div>
+                                <label for="graduationYear" class="block text-sm font-medium text-gray-700 mb-2">Graduation Year</label>
+                                <select id="graduationYear" name="graduationYear" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-linkedin transition-colors">
+                                    <option value="">Select year</option>
+                                    <option value="2024">2024</option>
+                                    <option value="2023">2023</option>
+                                    <option value="2022">2022</option>
+                                    <option value="2021">2021</option>
+                                    <option value="2020">2020</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="gpa" class="block text-sm font-medium text-gray-700 mb-2">GPA (Optional)</label>
+                                <input type="text" id="gpa" name="gpa" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-linkedin transition-colors" placeholder="3.8">
+                            </div>
+                        </div>
+                    </div>
 
-            <div class="form-group">
-                <label for="dateOfBirth">Date of Birth:</label>
-                <input type="date" id="dateOfBirth" name="dateOfBirth">
+                    <button type="submit" class="w-full bg-linkedin hover:bg-linkedinHover text-white font-medium py-3 px-4 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-linkedin">
+                        Submit Detailed Application
+                    </button>
+                </form>
             </div>
+        </div>
+    </div>
 
-            <button type="submit" class="submit-btn">Submit Form</button>
-        </form>
+    <!-- Experience Modal -->
+    <div id="experienceModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold">Add Work Experience</h3>
+                    <button onclick="closeExperienceModal()" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <form id="experienceForm" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Job Title</label>
+                        <input type="text" id="jobTitle" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-linkedin" placeholder="e.g. Software Engineer">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Company</label>
+                        <input type="text" id="company" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-linkedin" placeholder="e.g. Google">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                            <input type="date" id="startDate" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-linkedin">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                            <input type="date" id="endDate" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-linkedin">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                        <textarea id="jobDescription" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-linkedin" placeholder="Describe your responsibilities and achievements..."></textarea>
+                    </div>
+                    <div class="flex justify-end space-x-3 pt-4">
+                        <button type="button" onclick="closeExperienceModal()" class="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-linkedin text-white rounded-lg hover:bg-linkedinHover">Add Experience</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Skills Modal -->
+    <div id="skillsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold">Manage Skills</h3>
+                    <button onclick="closeSkillsModal()" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Add Skill</label>
+                        <div class="flex space-x-2">
+                            <input type="text" id="skillInput" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-linkedin focus:border-linkedin" placeholder="e.g. JavaScript, Python, React">
+                            <button type="button" onclick="addSkill()" class="px-4 py-2 bg-linkedin text-white rounded-lg hover:bg-linkedinHover">Add</button>
+                        </div>
+                    </div>
+                    <div id="modalSkillsList" class="space-y-2"></div>
+                    <div class="flex justify-end pt-4">
+                        <button type="button" onclick="closeSkillsModal()" class="px-4 py-2 bg-linkedin text-white rounded-lg hover:bg-linkedinHover">Done</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
-        document.getElementById('testForm').addEventListener('submit', function(e) {
+        // Tab functionality
+        function switchTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById(tabName + 'Tab').classList.add('active');
+            
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+            document.getElementById(tabName + 'Form').classList.remove('hidden');
+        }
+
+        // Experience modal functions
+        function openExperienceModal() {
+            document.getElementById('experienceModal').classList.remove('hidden');
+            document.getElementById('experienceModal').classList.add('flex');
+        }
+
+        function closeExperienceModal() {
+            document.getElementById('experienceModal').classList.add('hidden');
+            document.getElementById('experienceModal').classList.remove('flex');
+            document.getElementById('experienceForm').reset();
+        }
+
+        // Skills modal functions
+        function openSkillsModal() {
+            document.getElementById('skillsModal').classList.remove('hidden');
+            document.getElementById('skillsModal').classList.add('flex');
+            updateModalSkillsList();
+        }
+
+        function closeSkillsModal() {
+            document.getElementById('skillsModal').classList.add('hidden');
+            document.getElementById('skillsModal').classList.remove('flex');
+        }
+
+        // Skills management
+        let skills = [];
+
+        function addSkill() {
+            const skillInput = document.getElementById('skillInput');
+            const skill = skillInput.value.trim();
+            
+            if (skill && !skills.includes(skill)) {
+                skills.push(skill);
+                skillInput.value = '';
+                updateSkillsDisplay();
+                updateModalSkillsList();
+            }
+        }
+
+        function removeSkill(skill) {
+            skills = skills.filter(s => s !== skill);
+            updateSkillsDisplay();
+            updateModalSkillsList();
+        }
+
+        function updateSkillsDisplay() {
+            const skillsList = document.getElementById('skillsList');
+            if (skills.length === 0) {
+                skillsList.innerHTML = '<div class="text-gray-500 text-sm italic">No skills added yet. Click "Manage Skills" to add your expertise.</div>';
+            } else {
+                skillsList.innerHTML = skills.map(skill => 
+                    `<span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-linkedin text-white">
+                        ${skill}
+                        <button onclick="removeSkill('${skill}')" class="ml-2 hover:text-gray-300">×</button>
+                    </span>`
+                ).join('');
+            }
+        }
+
+        function updateModalSkillsList() {
+            const modalList = document.getElementById('modalSkillsList');
+            modalList.innerHTML = skills.map(skill => 
+                `<div class="flex justify-between items-center p-2 bg-gray-50 rounded">
+                    <span>${skill}</span>
+                    <button onclick="removeSkill('${skill}')" class="text-red-500 hover:text-red-700">Remove</button>
+                </div>`
+            ).join('');
+        }
+
+        // Experience management
+        let experiences = [];
+
+        document.getElementById('experienceForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            alert('Form submitted! This is just a test form for SmartFill RAG integration.');
+            
+            const experience = {
+                title: document.getElementById('jobTitle').value,
+                company: document.getElementById('company').value,
+                startDate: document.getElementById('startDate').value,
+                endDate: document.getElementById('endDate').value,
+                description: document.getElementById('jobDescription').value
+            };
+            
+            experiences.push(experience);
+            updateExperienceDisplay();
+            closeExperienceModal();
+        });
+
+        function updateExperienceDisplay() {
+            const experienceList = document.getElementById('experienceList');
+            if (experiences.length === 0) {
+                experienceList.innerHTML = '<div class="text-gray-500 text-sm italic">No experience added yet. Click "Add Experience" to get started.</div>';
+            } else {
+                experienceList.innerHTML = experiences.map((exp, index) => 
+                    `<div class="border border-gray-200 p-4 rounded-lg">
+                        <div class="flex justify-between items-start mb-2">
+                            <h4 class="font-semibold text-gray-900">${exp.title}</h4>
+                            <button onclick="removeExperience(${index})" class="text-red-500 hover:text-red-700 text-sm">Remove</button>
+                        </div>
+                        <p class="text-gray-700 font-medium">${exp.company}</p>
+                        <p class="text-gray-500 text-sm">${exp.startDate} - ${exp.endDate}</p>
+                        <p class="text-gray-600 text-sm mt-2">${exp.description}</p>
+                    </div>`
+                ).join('');
+            }
+        }
+
+        function removeExperience(index) {
+            experiences.splice(index, 1);
+            updateExperienceDisplay();
+        }
+
+        // Form submissions
+        document.getElementById('simpleJobForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            alert('Simple application submitted! This is a test for SmartFill RAG integration.');
+        });
+
+        document.getElementById('complexJobForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            alert('Detailed application submitted! This is a test for SmartFill RAG integration.');
+        });
+
+        // Allow Enter key to add skills
+        document.getElementById('skillInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addSkill();
+            }
         });
 
         // Log form fields for debugging
-        console.log('🤖 SmartFill Test Form loaded');
-        console.log('📝 Form fields detected:', document.querySelectorAll('input, textarea, select').length);
+        console.log('🤖 SmartFill Job Application loaded');
+        setTimeout(() => {
+            console.log('📝 Form fields detected:', document.querySelectorAll('input, textarea, select').length);
+        }, 100);
     </script>
+
+    <style>
+        .tab-button.active {
+            border-color: #0077b5;
+            color: #0077b5;
+        }
+        
+        .tab-button:not(.active) {
+            border-color: transparent;
+            color: #6b7280;
+        }
+        
+        .tab-button:hover:not(.active) {
+            color: #374151;
+            border-color: #d1d5db;
+        }
+    </style>
 </body>
 </html>
