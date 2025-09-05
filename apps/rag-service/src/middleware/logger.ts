@@ -12,7 +12,7 @@ export const requestLogger = async (c: Context, next: Next) => {
   await next()
 
   const duration = Date.now() - start
-  const status = (c.res as any)?.status || 200
+  const status = c.res.status || 200
 
   log.info(`${method} ${url} - ${status} (${duration}ms)`)
 }

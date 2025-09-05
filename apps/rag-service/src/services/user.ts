@@ -49,7 +49,7 @@ export class UserService {
         ...(userData.email && { email: userData.email }),
         ...(userData.name && { name: userData.name }),
       }
-      await db.insert(users).values(insertData as any)
+      await db.insert(users).values(insertData)
       
       return await this.getUserById(userData.id) as User
     }

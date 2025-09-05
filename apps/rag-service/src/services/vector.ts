@@ -1,6 +1,17 @@
 // ** import types
 import { randomUUID } from 'crypto'
 
+interface ChunkRow {
+  id: string
+  content: string
+  knowledge_id: string
+  chunk_index: string | number
+  embedding: number[] | string
+  title: string
+  tags: string[] | string
+  knowledge_type: 'text' | 'file'
+}
+
 // ** import core packages
 import { OpenAI } from 'openai'
 
@@ -72,7 +83,7 @@ export class VectorService {
 
     // Calculate cosine similarity in-memory
     const results = chunks.rows
-      .map((chunk: any) => {
+      .map((chunk: ChunkRow) => {
         const chunkEmbedding = Array.isArray(chunk.embedding) ? chunk.embedding : JSON.parse(chunk.embedding as string)
         const similarity = this.cosineSimilarity(queryEmbedding, chunkEmbedding)
         return {
@@ -81,7 +92,7 @@ export class VectorService {
           content: chunk.content,
           metadata: {
             knowledgeId: chunk.knowledge_id,
-            chunkIndex: parseInt(chunk.chunk_index),
+            chunkIndex: parseInt(String(chunk.chunk_index)),
             title: chunk.title,
             tags: Array.isArray(chunk.tags) ? chunk.tags : JSON.parse(chunk.tags || '[]'),
             type: chunk.knowledge_type,

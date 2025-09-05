@@ -14,7 +14,7 @@ export interface KnowledgeChunk {
   knowledgeId: string
   content: string
   embedding?: number[]
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 export interface QueryResult {
@@ -37,5 +37,5 @@ export interface VectorMetadata {
   type: 'text' | 'file'
   chunkIndex: number
   totalChunks: number
-  [key: string]: any
+  [key: string]: unknown
 }

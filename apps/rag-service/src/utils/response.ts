@@ -11,7 +11,7 @@ export const response = {
     } as ApiResponse<T>, status as any)
   },
 
-  error: (c: Context, error: string, status: number = 400, details?: any) => {
+  error: (c: Context, error: string, status: number = 400, details?: unknown) => {
     return c.json({
       success: false,
       error,
