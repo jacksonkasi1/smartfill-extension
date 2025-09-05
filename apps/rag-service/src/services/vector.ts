@@ -140,14 +140,12 @@ export class VectorService {
   private async generateEmbedding(text: string): Promise<number[]> {
     if (this.openai) {
       try {
-        console.log('🧠 Generating OpenAI embedding for text:', text.substring(0, 100) + '...')
         const response = await this.openai.embeddings.create({
           model: 'text-embedding-3-small', // Fast and cost-effective model
           input: text,
         })
         
         const embedding = response.data[0].embedding
-        console.log(`✅ Generated OpenAI embedding with ${embedding.length} dimensions`)
         return embedding
       } catch (error) {
         console.error('❌ OpenAI embedding failed, falling back to mock:', error.message)
@@ -155,7 +153,6 @@ export class VectorService {
       }
     }
     
-    console.log('⚠️  Using mock embeddings (OPENAI_API_KEY not configured)')
     return this.generateMockEmbedding(text)
   }
 
