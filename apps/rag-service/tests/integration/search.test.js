@@ -6,6 +6,7 @@
  * Tests for semantic search functionality with OpenAI embeddings
  */
 
+// ** import utils
 import { 
   BASE_URL, 
   colors, 
@@ -15,7 +16,8 @@ import {
   logError, 
   checkHealth,
   testKnowledgeItems,
-  testFileContent 
+  testFileContent,
+  testTiDBVectorFunctionality
 } from '../utils/test-helpers.js';
 
 // Store created IDs for cleanup
@@ -203,10 +205,12 @@ async function runSearchTests() {
   console.log(`${colors.magenta}🚀 Running Knowledge Search Tests${colors.reset}`);
   console.log(`${colors.cyan}Base URL: ${BASE_URL}${colors.reset}`);
   console.log(`${colors.cyan}OpenAI Embeddings: Enabled${colors.reset}`);
+  console.log(`${colors.cyan}TiDB Vector Database: Enabled${colors.reset}`);
   console.log(`${colors.cyan}Expected Accuracy: 95-100%${colors.reset}\n`);
   
   const tests = [
     checkHealth,
+    testTiDBVectorFunctionality,
     setupTestData,
     testSemanticSearch,
     testSearchFiltering,
