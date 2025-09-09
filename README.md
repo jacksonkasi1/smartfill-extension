@@ -151,6 +151,26 @@ SmartFill leverages TiDB Serverless for:
 - Scalable, serverless architecture
 - Multi-tenant data isolation
 
+## Testing Vector Operations
+
+To test TiDB Vector functionality:
+
+```bash
+# Test TiDB vector operations
+bun run test:tidb-vectors
+
+# Test full integration with vector search
+bun run test:integration
+
+# Run all tests including vector performance
+bun run test:all-integration
+```
+
+Requires:
+- `DATABASE_URL` in `.env` file pointing to TiDB instance
+- OpenAI API key for embedding generation
+- Running RAG service for integration tests
+
 ## Impact
 
 SmartFill makes web automation accessible to everyone, particularly helping users with disabilities, elderly individuals, and small businesses automate tedious form-filling tasks & Q&A.
