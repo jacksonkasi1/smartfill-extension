@@ -168,12 +168,38 @@ bun run test:all-integration
 
 Requires:
 - `DATABASE_URL` in `.env` file pointing to TiDB instance
+- OpenAI API key for embeddings
+- Running RAG service for integration tests
 - OpenAI API key for embedding generation
 - Running RAG service for integration tests
 
 ## Impact
 
 SmartFill makes web automation accessible to everyone, particularly helping users with disabilities, elderly individuals, and small businesses automate tedious form-filling tasks & Q&A.
+
+---
+
+### Raw SQL Vector Query Example
+
+```sql
+-- Create table with vector column
+CREATE TABLE documents (
+  id INT PRIMARY KEY,
+  content TEXT,
+  embedding VECTOR(1536) -- OpenAI embedding dimension
+);
+
+-- Insert document with vector embedding
+INSERT INTO documents (id, content, embedding) 
+VALUES (1, 'Sample text', '[0.1, 0.2, 0.3, ...]');
+
+-- Vector similarity search using cosine distance
+SELECT id, content, 
+       VEC_COSINE_DISTANCE(embedding, '[0.1, 0.2, 0.3, ...]') as distance
+FROM documents 
+ORDER BY distance ASC 
+LIMIT 5;
+```
 
 ---
 
