@@ -45,6 +45,30 @@ export namespace MessagingTypes {
     status: string
   }
 
+  // Recording Operations
+  export interface StartRecordingRequest {}
+
+  export interface StartRecordingResponse {
+    success: boolean
+    error?: string
+  }
+
+  export interface StopRecordingRequest {}
+
+  export interface StopRecordingResponse {
+    success: boolean
+    error?: string
+  }
+
+  export interface PlaySessionRequest {
+    sessionId: string
+  }
+
+  export interface PlaySessionResponse {
+    success: boolean
+    error?: string
+  }
+
   // Website Communication
   export interface WebsiteEventData {
     type: 'SMARTFILL_OPEN_EXTENSION'
@@ -71,6 +95,11 @@ export const MESSAGE_ACTIONS = {
     FILL: "fillForms",
     DETECT: "detectForms",
     PING: "ping"
+  },
+  RECORDING: {
+    START: "startRecording",
+    STOP: "stopRecording",
+    PLAY: "playSession"
   },
   POPUP: {
     OPEN: "OPEN_POPUP"
