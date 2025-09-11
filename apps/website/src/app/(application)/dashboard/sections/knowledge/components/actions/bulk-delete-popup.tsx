@@ -5,6 +5,9 @@ import * as React from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 
+// ** import apis
+import { deleteKnowledge } from "@/api/knowledge/knowledge"
+
 // ** import ui components
 import { Button } from "@/components/ui/button"
 import {
@@ -45,11 +48,7 @@ export function BulkDeletePopup({
       
       // Delete knowledge items sequentially
       for (const id of idsToDelete) {
-        const response = await fetch(`http://localhost:3001/api/v1/knowledge/${id}`, {
-          method: 'DELETE',
-        })
-        
-        const result = await response.json()
+        const result = await deleteKnowledge(id.toString())
         
         if (!result.success) {
           throw new Error(`Failed to delete knowledge ID ${id}`)

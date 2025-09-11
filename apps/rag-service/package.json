@@ -22,7 +22,11 @@
     "test": "node test-rag.js --mock",
     "test:mock": "node test-rag.js --mock",
     "test:real": "node test-rag.js --real",
-    "test:help": "node test-rag.js --help"
+    "test:help": "node test-rag.js --help",
+    "test:integration": "node tests/integration/search.test.js",
+    "test:tidb-vectors": "node tests/integration/tidb-vectors.test.js",
+    "test:create": "node tests/integration/create.test.js",
+    "test:all-integration": "npm run test:tidb-vectors && npm run test:create && npm run test:integration"
   },
   "dependencies": {
     "@clerk/backend": "^1.15.6",

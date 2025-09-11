@@ -16,6 +16,9 @@ import { ENV } from "@/config/env"
 // ** import apis
 import { ragClient } from "@/api/rag"
 
+// ** import utils
+import { MESSAGE_ACTIONS } from "@/lib/utils/messaging"
+
 // ** import styles
 import "./styles/index.css"
 
@@ -36,6 +39,16 @@ import {
   RecordIcon,
   StopIcon
 } from "./assets/ts-icons"
+
+// Add TrashIcon component
+const TrashIcon = ({ width = 16, height = 16, className = "" }) => (
+  <svg width={width} height={height} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3,6 5,6 21,6"></polyline>
+    <path d="m19,6v14a2,2 0,0 1,-2,2H7a2,2 0,0 1,-2,-2V6m3,0V4a2,2 0,0 1,2,-2h4a2,2 0,0 1,2,2v2"></path>
+    <line x1="10" y1="11" x2="10" y2="17"></line>
+    <line x1="14" y1="11" x2="14" y2="17"></line>
+  </svg>
+)
 
 const EXTENSION_URL = chrome.runtime.getURL(".")
 
@@ -380,9 +393,81 @@ function FormFillerContent() {
   const [promptText, setPromptText] = useState('')
   const [isFormFilling, setIsFormFilling] = useState(false)
   const [statusMessage, setStatusMessage] = useState<{text: string, type: 'success' | 'error' | 'info'} | null>(null)
+  
+  // Recording states
+  const [isRecording, setIsRecording] = useState(false)
+  const [recordingStatus, setRecordingStatus] = useState('Ready to record')
+  const [sessions, setSessions] = useState<any[]>([])
+  const [isLoadingSessions, setIsLoadingSessions] = useState(false)
+  const [deletingSessionIds, setDeletingSessionIds] = useState<Set<string>>(new Set())
 
-  const togglePage = () => {
-    setCurrentPage(currentPage === 'formFill' ? 'recordSession' : 'formFill')
+  const togglePage = async () => {
+    const newPage = currentPage === 'formFill' ? 'recordSession' : 'formFill'
+    setCurrentPage(newPage)
+    // Save current page to storage for persistence
+    await chrome.storage.local.set({ currentPage: newPage })
+  }
+
+  // Load saved current page and recording state on mount
+  useEffect(() => {
+    const loadSavedState = async () => {
+      try {
+        const result = await chrome.storage.local.get(['currentPage', 'recordingState'])
+        if (result.currentPage) {
+          setCurrentPage(result.currentPage)
+        }
+        if (result.recordingState) {
+          setIsRecording(result.recordingState.isRecording)
+          setRecordingStatus(result.recordingState.status)
+        }
+      } catch (error) {
+        console.error('Failed to load saved state:', error)
+      }
+    }
+    loadSavedState()
+  }, [])
+
+  // Save recording state to storage whenever it changes
+  useEffect(() => {
+    const saveRecordingState = async () => {
+      try {
+        await chrome.storage.local.set({
+          recordingState: {
+            isRecording,
+            status: recordingStatus
+          }
+        })
+      } catch (error) {
+        console.error('Failed to save recording state:', error)
+      }
+    }
+    saveRecordingState()
+  }, [isRecording, recordingStatus])
+
+  const deleteSession = async (sessionId: string) => {
+    setDeletingSessionIds(prev => new Set(prev).add(sessionId))
+    
+    try {
+      const result = await chrome.storage.local.get(['recordingSessions'])
+      const allSessions = result.recordingSessions || []
+      const filteredSessions = allSessions.filter((session: any) => session.id !== sessionId)
+      
+      await chrome.storage.local.set({ recordingSessions: filteredSessions })
+      
+      // Update local state
+      setSessions(prev => prev.filter(session => session.id !== sessionId))
+      showStatus('Session deleted successfully!', 'success')
+      
+    } catch (error) {
+      console.error('Error deleting session:', error)
+      showStatus('Failed to delete session', 'error')
+    } finally {
+      setDeletingSessionIds(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(sessionId)
+        return newSet
+      })
+    }
   }
 
   const showStatus = (text: string, type: 'success' | 'error' | 'info') => {
@@ -421,6 +506,139 @@ function FormFillerContent() {
     chrome.tabs.create({ url: `${ENV.CLERK_SYNC_HOST}/?auth=extension` })
     window.close()
   }
+
+  // Recording functions
+  const startRecording = async () => {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+      if (!tab?.id) {
+        showStatus("No active tab found", 'error')
+        return
+      }
+
+      // Check for browser internal pages
+      if (tab.url?.startsWith('chrome://') || tab.url?.startsWith('chrome-extension://') || 
+          tab.url?.startsWith('about:') || tab.url?.startsWith('edge://')) {
+        showStatus("Cannot record on browser internal pages", 'error')
+        return
+      }
+
+      console.log("Attempting to start recording on tab:", tab.id)
+
+      // Inject content script if needed
+      try {
+        await chrome.tabs.sendMessage(tab.id, { action: MESSAGE_ACTIONS.FORMS.PING })
+        console.log("Content script already injected")
+      } catch (error) {
+        console.log("Content script not found, injecting...")
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ["content.js"]
+          })
+          await new Promise(resolve => setTimeout(resolve, 500)) // Longer delay
+          console.log("Content script injected successfully")
+        } catch (scriptError) {
+          console.error("Failed to inject content script:", scriptError)
+          showStatus("Failed to inject content script", 'error')
+          return
+        }
+      }
+
+      // Start recording
+      console.log("Sending start recording message...")
+      const response = await chrome.tabs.sendMessage(tab.id, { action: MESSAGE_ACTIONS.RECORDING.START })
+      console.log("Recording response:", response)
+      
+      if (response?.success) {
+        setIsRecording(true)
+        setRecordingStatus('Recording in progress...')
+        showStatus('Recording started!', 'success')
+      } else {
+        const errorMsg = response?.error || 'Failed to start recording'
+        console.error("Recording failed:", errorMsg)
+        showStatus(errorMsg, 'error')
+      }
+    } catch (error) {
+      console.error("Error starting recording:", error)
+      showStatus(`Failed to start recording: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error')
+    }
+  }
+
+  const stopRecording = async () => {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+      if (!tab?.id) {
+        showStatus("No active tab found", 'error')
+        return
+      }
+
+      const response = await chrome.tabs.sendMessage(tab.id, { action: MESSAGE_ACTIONS.RECORDING.STOP })
+      if (response?.success) {
+        setIsRecording(false)
+        setRecordingStatus('Ready to record')
+        showStatus('Recording stopped and saved!', 'success')
+        loadSessions() // Refresh sessions list
+      } else {
+        showStatus('Failed to stop recording', 'error')
+      }
+    } catch (error) {
+      console.error("Error stopping recording:", error)
+      showStatus('Failed to stop recording', 'error')
+    }
+  }
+
+  const loadSessions = async () => {
+    setIsLoadingSessions(true)
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+      if (!tab?.url) return
+      
+      const domain = new URL(tab.url).hostname
+      const result = await chrome.storage.local.get(['recordingSessions'])
+      const allSessions = result.recordingSessions || []
+      const domainSessions = allSessions.filter((session: any) => session.domain === domain)
+      console.log('Loaded sessions for domain', domain, ':', domainSessions)
+      setSessions(domainSessions)
+    } catch (error) {
+      console.error("Error loading sessions:", error)
+      setSessions([])
+    } finally {
+      setIsLoadingSessions(false)
+    }
+  }
+
+  const playSession = async (sessionId: string) => {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+      if (!tab?.id) {
+        showStatus("No active tab found", 'error')
+        return
+      }
+
+      showStatus('Starting playback...', 'info')
+      const response = await chrome.tabs.sendMessage(tab.id, { 
+        action: MESSAGE_ACTIONS.RECORDING.PLAY, 
+        sessionId 
+      })
+      
+      if (response?.success) {
+        showStatus('Playback completed!', 'success')
+      } else {
+        showStatus('Playback failed', 'error')
+      }
+    } catch (error) {
+      console.error("Error playing session:", error)
+      showStatus('Playback failed', 'error')
+    }
+  }
+
+  // Load sessions when switching to record page
+  useEffect(() => {
+    if (currentPage === 'recordSession') {
+      loadSessions()
+    }
+  }, [currentPage])
 
 
   const handleFillForms = async () => {
@@ -597,33 +815,85 @@ function FormFillerContent() {
           <div id="recordSessionPage" className="page-content">
             <div className="recording-section">
               <div className="recording-status" id="recordingStatus">
-                <span className="status-dot" id="statusDot"></span>
-                <span className="status-text" id="statusText">Ready to record</span>
+                <span className={`status-dot ${isRecording ? 'recording' : ''}`} id="statusDot"></span>
+                <span className="status-text" id="statusText">{recordingStatus}</span>
               </div>
               
               <div className="recording-buttons">
-                <button id="recordBtn" className="record-btn">
-                  <RecordIcon width={20} height={20} />
-                  <span>Record</span>
-                </button>
-                
-                <button id="stopBtn" className="stop-btn hidden">
-                  <StopIcon width={20} height={20} />
-                  <span>Stop</span>
-                </button>
+                {!isRecording ? (
+                  <button 
+                    className="record-btn"
+                    onClick={startRecording}
+                  >
+                    <RecordIcon width={20} height={20} />
+                    <span>Record</span>
+                  </button>
+                ) : (
+                  <button 
+                    className="stop-btn"
+                    onClick={stopRecording}
+                  >
+                    <StopIcon width={20} height={20} />
+                    <span>Stop</span>
+                  </button>
+                )}
               </div>
             </div>
 
             <div className="sessions-section">
               <div className="sessions-header">
                 <h3>Saved Sessions</h3>
-                <button id="refreshSessions" className="refresh-btn">
+                <button 
+                  className="refresh-btn"
+                  onClick={loadSessions}
+                  disabled={isLoadingSessions}
+                >
                   <RefreshIcon width={16} height={16} />
                 </button>
               </div>
               
-              <div id="sessionsList" className="sessions-list">
-                <div className="no-sessions">No sessions found for this site</div>
+              <div className="sessions-list">
+                {isLoadingSessions ? (
+                  <div className="loading-sessions">Loading sessions...</div>
+                ) : sessions.length > 0 ? (
+                  sessions.map((session) => {
+                    console.log('Rendering session:', session)
+                    return (
+                    <div key={session.id} className="session-item">
+                      <div className="session-info">
+                        <div className="session-name">{session.name}</div>
+                        <div className="session-date">
+                          {session.createdAt ? new Date(session.createdAt).toLocaleDateString() : 'Unknown date'}
+                        </div>
+                        <div className="session-steps">{session.steps?.length || 0} steps</div>
+                      </div>
+                      <div className="session-actions">
+                        <button 
+                          className="play-btn"
+                          onClick={() => playSession(session.id)}
+                          disabled={deletingSessionIds.has(session.id)}
+                        >
+                          Play
+                        </button>
+                        <button 
+                          className={`delete-btn ${deletingSessionIds.has(session.id) ? 'deleting' : ''}`}
+                          onClick={() => deleteSession(session.id)}
+                          disabled={deletingSessionIds.has(session.id)}
+                          title="Delete session"
+                        >
+                          {deletingSessionIds.has(session.id) ? (
+                            <div className="loading-spinner-small"></div>
+                          ) : (
+                            <TrashIcon width={14} height={14} />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                    )
+                  })
+                ) : (
+                  <div className="no-sessions">No sessions found for this site</div>
+                )}
               </div>
             </div>
           </div>

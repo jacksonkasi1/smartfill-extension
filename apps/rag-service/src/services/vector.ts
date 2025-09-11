@@ -6,10 +6,10 @@ interface ChunkRow {
   content: string
   knowledge_id: string
   chunk_index: string | number
-  embedding: number[] | string
   title: string
   tags: string[] | string
   knowledge_type: 'text' | 'file'
+  similarity_score: number
 }
 
 // ** import core packages
@@ -36,27 +36,37 @@ export class VectorService {
     knowledgeId: string,
     title: string,
     chunks: string[],
-    _tags: string[] = [],
-    _type: 'text' | 'file' = 'text'
+    tags: string[] = [],
+    type: 'text' | 'file' = 'text'
   ) {
-    // Combine title with each chunk for better semantic search
-    const vectors = await Promise.all(chunks.map(async (chunk, index) => {
-      const combinedText = `${title}: ${chunk}`
-      return {
+    const chunkData = []
+    
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i]
+      const embedding = await this.generateEmbedding(chunk)
+      
+      chunkData.push({
         id: randomUUID(),
         knowledgeId,
-        content: chunk, // Store original chunk content
-        chunkIndex: index.toString(),
-        embedding: await this.generateEmbedding(combinedText), // Vectorize combined text
-      }
-    }))
+        content: chunk,
+        chunkIndex: i.toString(),
+        embedding, // Direct array, TiDB will handle the conversion
+        createdAt: new Date(),
+      })
+    }
 
-    await db.insert(knowledgeChunks).values(vectors)
-    
-    return vectors.map((v, index) => ({
-      vectorId: v.id,
-      content: v.content,
-      chunkIndex: index,
+    await db.insert(knowledgeChunks).values(chunkData)
+    return chunkData.map(chunk => ({
+      id: chunk.id,
+      content: chunk.content,
+      metadata: {
+        knowledgeId,
+        title,
+        tags,
+        type,
+        chunkIndex: parseInt(chunk.chunkIndex),
+        totalChunks: chunks.length,
+      },
     }))
   }
 
@@ -71,47 +81,46 @@ export class VectorService {
   ) {
     const { topK = 5, minScore = 0.3 } = options
     const queryEmbedding = await this.generateEmbedding(query)
+    const queryVector = JSON.stringify(queryEmbedding)
     
-    // Get all chunks for the user (fallback approach without vector search)
+    // Use TiDB's native vector search with cosine distance
     const chunks = await db.execute(
-      sql`SELECT kc.id, kc.content, kc.knowledge_id, kc.chunk_index, kc.embedding,
-                 k.title, k.tags, k.knowledge_type
+      sql`SELECT 
+            kc.id, 
+            kc.content, 
+            kc.knowledge_id, 
+            kc.chunk_index,
+            k.title, 
+            k.tags, 
+            k.knowledge_type,
+            (1 - VEC_COSINE_DISTANCE(kc.embedding, ${queryVector})) AS similarity_score
           FROM knowledge_chunks kc
           INNER JOIN knowledge k ON k.id = kc.knowledge_id
-          WHERE k.user_id = ${userId}`
+          WHERE k.user_id = ${userId}
+            AND (1 - VEC_COSINE_DISTANCE(kc.embedding, ${queryVector})) >= ${minScore}
+          ORDER BY VEC_COSINE_DISTANCE(kc.embedding, ${queryVector}) ASC
+          LIMIT ${topK}`
     )
 
-    // Calculate cosine similarity in-memory
-    const results = chunks.rows
-      .map((chunk: ChunkRow) => {
-        const chunkEmbedding = Array.isArray(chunk.embedding) ? chunk.embedding : JSON.parse(chunk.embedding as string)
-        const similarity = this.cosineSimilarity(queryEmbedding, chunkEmbedding)
-        return {
-          id: chunk.id,
-          score: similarity,
-          content: chunk.content,
-          metadata: {
-            knowledgeId: chunk.knowledge_id,
-            chunkIndex: parseInt(String(chunk.chunk_index)),
-            title: chunk.title,
-            tags: Array.isArray(chunk.tags) ? chunk.tags : JSON.parse(chunk.tags || '[]'),
-            type: chunk.knowledge_type,
-          },
-        }
-      })
-      .filter(result => result.score >= minScore)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, topK)
+    // Format results
+    const results = chunks.rows.map((chunk: any) => ({
+      id: chunk.id,
+      score: chunk.similarity_score,
+      content: chunk.content,
+      metadata: {
+        knowledgeId: chunk.knowledge_id,
+        chunkIndex: parseInt(String(chunk.chunk_index)),
+        title: chunk.title,
+        tags: Array.isArray(chunk.tags) ? chunk.tags : JSON.parse(chunk.tags || '[]'),
+        type: chunk.knowledge_type,
+      },
+    }))
 
     return results
   }
 
-  private cosineSimilarity(vectorA: number[], vectorB: number[]): number {
-    const dotProduct = vectorA.reduce((sum, a, i) => sum + a * vectorB[i], 0)
-    const magnitudeA = Math.sqrt(vectorA.reduce((sum, a) => sum + a * a, 0))
-    const magnitudeB = Math.sqrt(vectorB.reduce((sum, b) => sum + b * b, 0))
-    return magnitudeA && magnitudeB ? dotProduct / (magnitudeA * magnitudeB) : 0
-  }
+  // Cosine similarity is now handled natively by TiDB's VEC_COSINE_DISTANCE function
+  // This provides better performance and accuracy at scale
 
   async deleteKnowledge(userId: string, knowledgeId: string) {
     await db.delete(knowledgeChunks).where(eq(knowledgeChunks.knowledgeId, knowledgeId))

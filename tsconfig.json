@@ -21,11 +21,8 @@
   },
   "include": [],
   "references": [
-    {"path": "./apps/extension"},
+    {"path": "./apps/smartfill-extension-clerk"},
     {"path": "./apps/website"},
-    {"path": "./apps/rag-service"},
-    {"path": "./packages/shared-types"},
-    {"path": "./packages/auth-client"},
-    {"path": "./packages/config"}
+    {"path": "./apps/rag-service"}
   ]
 }
