@@ -215,7 +215,7 @@ export class RAGClient {
       const queryRequest: RAGQueryRequest = {
         query: searchQuery,
         limit: 3,
-        minScore: 0.3,
+        minScore: 0.1,
       }
 
       // Add tag filtering if not using auto RAG

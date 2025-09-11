@@ -79,7 +79,7 @@ export class VectorService {
       minScore?: number
     } = {}
   ) {
-    const { topK = 5, minScore = 0.3 } = options
+    const { topK = 5, minScore = 0.1 } = options
     const queryEmbedding = await this.generateEmbedding(query)
     const queryVector = JSON.stringify(queryEmbedding)
     

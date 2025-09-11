@@ -34,7 +34,6 @@ app.get('/', zValidator('query', paginationSchema), async (c) => {
 app.post('/', async (c) => {
   const body = await c.req.json()
   
-  // Manual validation to see what's failing
   const validation = createKnowledgeSchema.safeParse(body)
   if (!validation.success) {
     console.error('Validation failed:', validation.error.issues)
@@ -138,13 +137,8 @@ app.delete('/:id', async (c) => {
 })
 
 app.post('/query', async (c) => {
-  const timestamp = new Date().toISOString()
-  const userAgent = c.req.header('User-Agent') || 'Unknown'
-  
-  
   const body = await c.req.json()
   
-  // Manual validation to see what's failing
   const validation = queryKnowledgeSchema.safeParse(body)
   if (!validation.success) {
     console.error('❌ Query validation failed:', validation.error.issues)
@@ -154,13 +148,11 @@ app.post('/query', async (c) => {
   const { query, limit, minScore } = validation.data
   const userId = c.get('userId')
 
-
   try {
     const results = await knowledgeService.queryKnowledge(userId, query, {
       limit,
       minScore,
     })
-    
     
     return response.success(c, results, `Found ${results.length} relevant results`)
   } catch (error) {
