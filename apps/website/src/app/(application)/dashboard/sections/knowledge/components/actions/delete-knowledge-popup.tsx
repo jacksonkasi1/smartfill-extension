@@ -5,6 +5,9 @@ import * as React from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 
+// ** import apis
+import { deleteKnowledge } from "@/api/knowledge/knowledge"
+
 // ** import ui components
 import { Button } from "@/components/ui/button"
 import {
@@ -38,11 +41,7 @@ export function DeleteKnowledgePopup({
     try {
       setIsLoading(true)
       
-      const response = await fetch(`http://localhost:3001/api/v1/knowledge/${knowledgeId}`, {
-        method: 'DELETE',
-      })
-      
-      const result = await response.json()
+      const result = await deleteKnowledge(knowledgeId)
 
       if (result.success) {
         toast.success("Knowledge deleted successfully")
