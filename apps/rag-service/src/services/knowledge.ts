@@ -180,7 +180,7 @@ export class KnowledgeService {
       minScore?: number
     } = {}
   ): Promise<QueryResult[]> {
-    const { limit = 5, minScore = 0.3 } = options
+    const { limit = 5, minScore = 0.1 } = options
 
     const results = await this.vectorService.queryKnowledge(userId, query, {
       topK: limit,

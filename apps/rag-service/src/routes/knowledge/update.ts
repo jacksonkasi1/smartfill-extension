@@ -26,7 +26,7 @@ app.put('/:id',
     const { id } = c.req.valid('param')
     const updates = c.req.valid('json')
     const userId = c.get('userId')
-
+    
     try {
       const knowledge = await knowledgeService.updateKnowledge(userId, id, updates)
       
