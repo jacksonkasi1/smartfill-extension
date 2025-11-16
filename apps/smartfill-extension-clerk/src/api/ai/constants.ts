@@ -71,3 +71,9 @@ export const DEFAULT_MODELS: Record<LLMProvider, string> = {
   groq: 'llama-3.1-8b-instant',
   openrouter: 'openai/gpt-4o-mini'
 }
+
+// ** LLM Generation Parameters
+export const LLM_GENERATION_CONFIG = {
+  temperature: 0.7,
+  maxTokens: 2048
+} as const

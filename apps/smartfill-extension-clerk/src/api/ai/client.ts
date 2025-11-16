@@ -3,7 +3,7 @@ import type { AIFormData, FormField } from '@/types/extension'
 import type { LLMProvider } from './constants'
 
 // ** import constants
-import { PROVIDERS, DEFAULT_PROVIDER, DEFAULT_MODELS } from './constants'
+import { PROVIDERS, DEFAULT_PROVIDER, DEFAULT_MODELS, LLM_GENERATION_CONFIG } from './constants'
 
 // ** import utils
 import { buildPrompt } from './prompt'
@@ -107,8 +107,8 @@ async function callGroqAPI(prompt: string, model: string, apiKey: string): Promi
           content: prompt
         }
       ],
-      temperature: 0.7,
-      max_tokens: 2048
+      temperature: LLM_GENERATION_CONFIG.temperature,
+      max_tokens: LLM_GENERATION_CONFIG.maxTokens
     })
   })
 
@@ -157,8 +157,8 @@ async function callOpenRouterAPI(prompt: string, model: string, apiKey: string):
           content: prompt
         }
       ],
-      temperature: 0.7,
-      max_tokens: 2048
+      temperature: LLM_GENERATION_CONFIG.temperature,
+      max_tokens: LLM_GENERATION_CONFIG.maxTokens
     })
   })
 
