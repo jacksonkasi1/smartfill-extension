@@ -10,6 +10,9 @@ import {
   useClerk
 } from "@clerk/chrome-extension"
 
+// ** import types
+import type { LLMProvider } from "@/api/ai/constants"
+
 // ** import config
 import { ENV } from "@/config/env"
 
@@ -18,7 +21,6 @@ import { ragClient } from "@/api/rag"
 
 // ** import constants
 import { PROVIDERS, DEFAULT_PROVIDER, DEFAULT_MODELS } from "@/api/ai/constants"
-import type { LLMProvider } from "@/api/ai/constants"
 
 // ** import utils
 import { MESSAGE_ACTIONS } from "@/lib/utils/messaging"

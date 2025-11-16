@@ -146,8 +146,8 @@ async function callOpenRouterAPI(prompt: string, model: string, apiKey: string):
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
-      'HTTP-Referer': 'https://github.com/your-extension', // Optional: your site URL
-      'X-Title': 'SmartFill Extension' // Optional: your app name
+      'HTTP-Referer': 'https://github.com/jacksonkasi1/smartfill-extension',
+      'X-Title': 'SmartFill Extension'
     },
     body: JSON.stringify({
       model: model,
