@@ -1,7 +1,7 @@
 {
   "name": "smartfill-extension-clerk",
   "displayName": "SmartFill - AI Form Filler",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "SmartFill Chrome Extension with Clerk Authentication",
   "scripts": {
     "dev": "plasmo dev",
