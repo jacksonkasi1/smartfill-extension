@@ -61,7 +61,11 @@ const EXTENSION_URL = chrome.runtime.getURL(".")
 function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
   // LLM Provider Settings
   const [selectedProvider, setSelectedProvider] = useState<LLMProvider>(DEFAULT_PROVIDER)
+  const [modelType, setModelType] = useState<'recommended' | 'custom'>('recommended')
   const [selectedModel, setSelectedModel] = useState<string>('')
+  const [customModel, setCustomModel] = useState<string>('')
+  const [providerDropdownOpen, setProviderDropdownOpen] = useState(false)
+  const [modelDropdownOpen, setModelDropdownOpen] = useState(false)
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({
     gemini: '',
     groq: '',
@@ -88,7 +92,16 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
   // Update selected model when provider changes
   useEffect(() => {
     if (selectedProvider) {
-      setSelectedModel(DEFAULT_MODELS[selectedProvider])
+      const defaultModel = DEFAULT_MODELS[selectedProvider]
+      setSelectedModel(defaultModel)
+      // Check if current model is in recommended list
+      const isRecommended = PROVIDERS[selectedProvider].models.some(m => m.id === defaultModel)
+      if (!isRecommended && defaultModel) {
+        setModelType('custom')
+        setCustomModel(defaultModel)
+      } else {
+        setModelType('recommended')
+      }
     }
   }, [selectedProvider])
 
@@ -110,6 +123,15 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
       // Load model
       const model = result.llmModel || DEFAULT_MODELS[provider]
       setSelectedModel(model)
+
+      // Check if model is in recommended list
+      const isRecommended = PROVIDERS[provider].models.some(m => m.id === model)
+      if (!isRecommended && model) {
+        setModelType('custom')
+        setCustomModel(model)
+      } else {
+        setModelType('recommended')
+      }
 
       // Load API keys
       const loadedApiKeys = result.llmApiKeys || {}
@@ -182,8 +204,32 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
 
   const handleProviderChange = (provider: LLMProvider) => {
     setSelectedProvider(provider)
+    setProviderDropdownOpen(false)
     // Auto-select default model for the provider
-    setSelectedModel(DEFAULT_MODELS[provider])
+    const defaultModel = DEFAULT_MODELS[provider]
+    setSelectedModel(defaultModel)
+    setModelType('recommended')
+    setCustomModel('')
+  }
+
+  const handleModelTypeChange = (type: 'recommended' | 'custom') => {
+    setModelType(type)
+    if (type === 'recommended') {
+      setSelectedModel(DEFAULT_MODELS[selectedProvider])
+      setCustomModel('')
+    } else {
+      setCustomModel(selectedModel)
+    }
+  }
+
+  const handleRecommendedModelChange = (modelId: string) => {
+    setSelectedModel(modelId)
+    setModelDropdownOpen(false)
+  }
+
+  const handleCustomModelChange = (value: string) => {
+    setCustomModel(value)
+    setSelectedModel(value)
   }
 
   const handleApiKeyChange = (provider: string, value: string) => {
@@ -241,38 +287,106 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
             <h3>AI Provider Settings</h3>
             <p className="setting-description">Configure your preferred AI provider and model for form filling</p>
 
-            {/* Provider Selection */}
+            {/* Provider Selection - Custom Dropdown */}
             <div className="setting-row">
-              <label htmlFor="llmProvider">AI Provider</label>
-              <select
-                id="llmProvider"
-                value={selectedProvider}
-                onChange={(e) => handleProviderChange(e.target.value as LLMProvider)}
-                className="provider-select"
-              >
-                {Object.entries(PROVIDERS).map(([key, config]) => (
-                  <option key={key} value={key}>
-                    {config.name}
-                  </option>
-                ))}
-              </select>
+              <label>AI Provider</label>
+              <div className="custom-select-wrapper">
+                <button
+                  type="button"
+                  className="custom-select-trigger"
+                  onClick={() => setProviderDropdownOpen(!providerDropdownOpen)}
+                  onBlur={() => setTimeout(() => setProviderDropdownOpen(false), 200)}
+                >
+                  <span>{PROVIDERS[selectedProvider].name}</span>
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="chevron-icon">
+                    <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+                {providerDropdownOpen && (
+                  <div className="custom-select-dropdown">
+                    {Object.entries(PROVIDERS).map(([key, config]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        className={`custom-select-option ${selectedProvider === key ? 'selected' : ''}`}
+                        onClick={() => handleProviderChange(key as LLMProvider)}
+                      >
+                        {config.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Model Selection */}
+            {/* Model Type Toggle */}
             <div className="setting-row">
-              <label htmlFor="llmModel">Model</label>
-              <select
-                id="llmModel"
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-                className="model-select"
-              >
-                {PROVIDERS[selectedProvider].models.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.name} {model.description && `- ${model.description}`}
-                  </option>
-                ))}
-              </select>
+              <label>Model Selection</label>
+              <div className="model-type-toggle">
+                <button
+                  type="button"
+                  className={`toggle-btn ${modelType === 'recommended' ? 'active' : ''}`}
+                  onClick={() => handleModelTypeChange('recommended')}
+                >
+                  Recommended
+                </button>
+                <button
+                  type="button"
+                  className={`toggle-btn ${modelType === 'custom' ? 'active' : ''}`}
+                  onClick={() => handleModelTypeChange('custom')}
+                >
+                  Custom
+                </button>
+              </div>
+            </div>
+
+            {/* Model Selection - Conditional */}
+            <div className="setting-row">
+              <label>{modelType === 'recommended' ? 'Select Model' : 'Custom Model ID'}</label>
+              {modelType === 'recommended' ? (
+                <div className="custom-select-wrapper">
+                  <button
+                    type="button"
+                    className="custom-select-trigger"
+                    onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
+                    onBlur={() => setTimeout(() => setModelDropdownOpen(false), 200)}
+                  >
+                    <span className="model-display">
+                      {PROVIDERS[selectedProvider].models.find(m => m.id === selectedModel)?.name || selectedModel}
+                    </span>
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="chevron-icon">
+                      <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </button>
+                  {modelDropdownOpen && (
+                    <div className="custom-select-dropdown">
+                      {PROVIDERS[selectedProvider].models.map((model) => (
+                        <button
+                          key={model.id}
+                          type="button"
+                          className={`custom-select-option ${selectedModel === model.id ? 'selected' : ''}`}
+                          onClick={() => handleRecommendedModelChange(model.id)}
+                        >
+                          <div className="model-option-content">
+                            <div className="model-name">{model.name}</div>
+                            {model.description && (
+                              <div className="model-description">{model.description}</div>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  className="custom-model-input"
+                  placeholder="e.g., llama-3.1-8b-instant"
+                  value={customModel}
+                  onChange={(e) => handleCustomModelChange(e.target.value)}
+                />
+              )}
             </div>
 
             {/* API Key Input for Selected Provider */}
