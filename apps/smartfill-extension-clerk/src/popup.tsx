@@ -89,21 +89,8 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
     }
   }, [isOpen])
 
-  // Update selected model when provider changes
-  useEffect(() => {
-    if (selectedProvider) {
-      const defaultModel = DEFAULT_MODELS[selectedProvider]
-      setSelectedModel(defaultModel)
-      // Check if current model is in recommended list
-      const isRecommended = PROVIDERS[selectedProvider].models.some(m => m.id === defaultModel)
-      if (!isRecommended && defaultModel) {
-        setModelType('custom')
-        setCustomModel(defaultModel)
-      } else {
-        setModelType('recommended')
-      }
-    }
-  }, [selectedProvider])
+  // Note: Removed the auto-reset useEffect that was overriding loaded settings
+  // The provider change is now handled only in handleProviderChange
 
   const loadSettings = async () => {
     try {
@@ -416,6 +403,19 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
                 {keyStatus.message}
               </div>
             )}
+
+            {/* Active Configuration Indicator */}
+            <div className="active-config-indicator">
+              <div className="config-label">Active Configuration:</div>
+              <div className="config-details">
+                <span className="provider-badge">{PROVIDERS[selectedProvider].name}</span>
+                <span className="config-separator">·</span>
+                <span className="model-id">{selectedModel || 'Not set'}</span>
+                {modelType === 'custom' && selectedModel && (
+                  <span className="custom-badge">Custom</span>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* RAG Knowledge Settings */}
