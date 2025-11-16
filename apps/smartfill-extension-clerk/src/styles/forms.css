@@ -37,10 +37,37 @@
   color: var(--text-tertiary);
 }
 
+/* Prompt Header */
+.prompt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-sm);
+}
+
+/* Clear Instructions Button */
+.clear-instructions-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.clear-instructions-btn:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: rgba(249, 115, 22, 0.05);
+}
+
 /* Main Prompt Textarea */
 .main-prompt-textarea {
   width: 100%;
-  min-height: 210px;
+  min-height: 160px;
   padding: var(--space-md);
   border: 2px solid var(--border);
   border-radius: 12px;

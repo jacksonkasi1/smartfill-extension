@@ -82,6 +82,9 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
   const [ragStatus, setRagStatus] = useState<{ message: string, type: 'success' | 'error' | null }>({ message: '', type: null })
   const [tagsLoading, setTagsLoading] = useState(false)
 
+  // UI Settings
+  const [showStatusBar, setShowStatusBar] = useState(false)
+
   // Load existing settings on mount
   useEffect(() => {
     if (isOpen) {
@@ -100,7 +103,8 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
         'llmApiKeys',
         'ragEnabled',
         'autoRag',
-        'selectedTags'
+        'selectedTags',
+        'showStatusBar'
       ])
 
       // Load provider settings
@@ -138,6 +142,11 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
       }
       if (result.selectedTags) {
         setSelectedTags(result.selectedTags)
+      }
+
+      // Load UI settings
+      if (result.showStatusBar !== undefined) {
+        setShowStatusBar(result.showStatusBar)
       }
 
       // Load available tags from the backend
@@ -253,6 +262,14 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
       setSelectedTags(selectedTags.filter(t => t !== tag))
     } else {
       setSelectedTags([...selectedTags, tag])
+    }
+  }
+
+  const saveUISettings = async () => {
+    try {
+      await chrome.storage.sync.set({ showStatusBar })
+    } catch (error) {
+      console.error('Save UI settings error:', error)
     }
   }
 
@@ -418,15 +435,35 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
             </div>
           </div>
 
+          {/* UI Settings */}
+          <div className="setting-group">
+            <h3>Display Settings</h3>
+            <p className="setting-description">Customize the extension's user interface</p>
+
+            <div className="setting-row">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={showStatusBar}
+                  onChange={(e) => {
+                    setShowStatusBar(e.target.checked)
+                    saveUISettings()
+                  }}
+                />
+                <span>Show status bar</span>
+              </label>
+            </div>
+          </div>
+
           {/* RAG Knowledge Settings */}
           <div className="setting-group">
             <h3>Knowledge Settings</h3>
             <p className="setting-description">Configure how AI uses your knowledge base for form filling</p>
-            
+
             <div className="setting-row">
               <label className="checkbox-label">
-                <input 
-                  type="checkbox" 
+                <input
+                  type="checkbox"
                   checked={ragEnabled}
                   onChange={(e) => setRagEnabled(e.target.checked)}
                 />
@@ -605,6 +642,7 @@ function FormFillerContent() {
   const [promptText, setPromptText] = useState('')
   const [isFormFilling, setIsFormFilling] = useState(false)
   const [statusMessage, setStatusMessage] = useState<{text: string, type: 'success' | 'error' | 'info'} | null>(null)
+  const [showStatusBar, setShowStatusBar] = useState(false)
   
   // Recording states
   const [isRecording, setIsRecording] = useState(false)
@@ -639,6 +677,24 @@ function FormFillerContent() {
     loadSavedState()
   }, [])
 
+  // Load UI settings and custom instructions on mount
+  useEffect(() => {
+    const loadUISettings = async () => {
+      try {
+        const result = await chrome.storage.sync.get(['showStatusBar', 'customInstructions'])
+        if (result.showStatusBar !== undefined) {
+          setShowStatusBar(result.showStatusBar)
+        }
+        if (result.customInstructions) {
+          setPromptText(result.customInstructions)
+        }
+      } catch (error) {
+        console.error('Failed to load UI settings:', error)
+      }
+    }
+    loadUISettings()
+  }, [])
+
   // Save recording state to storage whenever it changes
   useEffect(() => {
     const saveRecordingState = async () => {
@@ -655,6 +711,18 @@ function FormFillerContent() {
     }
     saveRecordingState()
   }, [isRecording, recordingStatus])
+
+  // Save custom instructions whenever they change
+  useEffect(() => {
+    const saveCustomInstructions = async () => {
+      try {
+        await chrome.storage.sync.set({ customInstructions: promptText })
+      } catch (error) {
+        console.error('Failed to save custom instructions:', error)
+      }
+    }
+    saveCustomInstructions()
+  }, [promptText])
 
   const deleteSession = async (sessionId: string) => {
     setDeletingSessionIds(prev => new Set(prev).add(sessionId))
@@ -685,6 +753,15 @@ function FormFillerContent() {
   const showStatus = (text: string, type: 'success' | 'error' | 'info') => {
     setStatusMessage({ text, type })
     setTimeout(() => setStatusMessage(null), 4000)
+  }
+
+  const clearCustomInstructions = async () => {
+    setPromptText('')
+    try {
+      await chrome.storage.sync.remove('customInstructions')
+    } catch (error) {
+      console.error('Failed to clear custom instructions:', error)
+    }
   }
 
   // Store auth token for popup context (fallback when background script approach fails)
@@ -975,10 +1052,10 @@ function FormFillerContent() {
             </SignedIn>
           </div>
         </div>
-        
 
-        {/* Status Display */}
-        {statusMessage && (
+
+        {/* Status Display - Only show if enabled in settings */}
+        {showStatusBar && statusMessage && (
           <div className={`status ${statusMessage.type}`}>
             {statusMessage.text}
           </div>
@@ -989,16 +1066,27 @@ function FormFillerContent() {
           <div id="formFillPage" className="page-content">
             {/* Custom Prompt Section */}
             <div className="prompt-section">
-              <label htmlFor="mainPromptText" className="prompt-label">Custom Instructions (Optional)</label>
-              <textarea 
-                id="mainPromptText" 
-                className="main-prompt-textarea" 
+              <div className="prompt-header">
+                <label htmlFor="mainPromptText" className="prompt-label">Custom Instructions (Optional)</label>
+                {promptText && (
+                  <button
+                    className="clear-instructions-btn"
+                    onClick={clearCustomInstructions}
+                    title="Clear custom instructions"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <textarea
+                id="mainPromptText"
+                className="main-prompt-textarea"
                 placeholder={`Add specific instructions for form filling, or leave empty for smart defaults:
 • Fill with professional information
 • Use company name: TechCorp Inc
 • Make me appear as a senior developer
 • Use email format: firstname.lastname@domain.com`}
-                rows={3}
+                rows={7}
                 value={promptText}
                 onChange={(e) => setPromptText(e.target.value)}
               />

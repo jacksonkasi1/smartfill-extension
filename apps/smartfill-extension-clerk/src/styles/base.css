@@ -12,7 +12,7 @@ body {
   font-size: 14px;
   line-height: 1.5;
   width: 380px;
-  height: 420px;
+  min-height: auto;
   overflow: hidden;
   position: relative;
   -webkit-font-smoothing: antialiased;
