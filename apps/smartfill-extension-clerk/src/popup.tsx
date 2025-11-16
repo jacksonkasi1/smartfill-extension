@@ -10,11 +10,17 @@ import {
   useClerk
 } from "@clerk/chrome-extension"
 
+// ** import types
+import type { LLMProvider } from "@/api/ai/constants"
+
 // ** import config
 import { ENV } from "@/config/env"
 
 // ** import apis
 import { ragClient } from "@/api/rag"
+
+// ** import constants
+import { PROVIDERS, DEFAULT_PROVIDER, DEFAULT_MODELS } from "@/api/ai/constants"
 
 // ** import utils
 import { MESSAGE_ACTIONS } from "@/lib/utils/messaging"
@@ -53,10 +59,17 @@ const TrashIcon = ({ width = 16, height = 16, className = "" }) => (
 const EXTENSION_URL = chrome.runtime.getURL(".")
 
 function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
-  const [apiKey, setApiKey] = useState('')
+  // LLM Provider Settings
+  const [selectedProvider, setSelectedProvider] = useState<LLMProvider>(DEFAULT_PROVIDER)
+  const [selectedModel, setSelectedModel] = useState<string>('')
+  const [apiKeys, setApiKeys] = useState<Record<string, string>>({
+    gemini: '',
+    groq: '',
+    openrouter: ''
+  })
   const [keyStatus, setKeyStatus] = useState<{ message: string, type: 'success' | 'error' | null }>({ message: '', type: null })
   const [isLoading, setIsLoading] = useState(false)
-  
+
   // RAG Settings
   const [ragEnabled, setRagEnabled] = useState(true)
   const [autoRag, setAutoRag] = useState(true)
@@ -65,25 +78,49 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
   const [ragStatus, setRagStatus] = useState<{ message: string, type: 'success' | 'error' | null }>({ message: '', type: null })
   const [tagsLoading, setTagsLoading] = useState(false)
 
-  // Load existing API key and RAG settings on mount
+  // Load existing settings on mount
   useEffect(() => {
     if (isOpen) {
       loadSettings()
     }
   }, [isOpen])
 
+  // Update selected model when provider changes
+  useEffect(() => {
+    if (selectedProvider) {
+      setSelectedModel(DEFAULT_MODELS[selectedProvider])
+    }
+  }, [selectedProvider])
+
   const loadSettings = async () => {
     try {
       const result = await chrome.storage.sync.get([
-        'geminiApiKey', 
-        'ragEnabled', 
-        'autoRag', 
+        'llmProvider',
+        'llmModel',
+        'llmApiKeys',
+        'ragEnabled',
+        'autoRag',
         'selectedTags'
       ])
-      
-      if (result.geminiApiKey) {
-        setApiKey(result.geminiApiKey)
-      }
+
+      // Load provider settings
+      const provider = result.llmProvider || DEFAULT_PROVIDER
+      setSelectedProvider(provider)
+
+      // Load model
+      const model = result.llmModel || DEFAULT_MODELS[provider]
+      setSelectedModel(model)
+
+      // Load API keys
+      const loadedApiKeys = result.llmApiKeys || {}
+
+      setApiKeys({
+        gemini: loadedApiKeys.gemini || '',
+        groq: loadedApiKeys.groq || '',
+        openrouter: loadedApiKeys.openrouter || ''
+      })
+
+      // Load RAG settings
       if (result.ragEnabled !== undefined) {
         setRagEnabled(result.ragEnabled)
       }
@@ -114,27 +151,46 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
     }
   }
 
-  const saveApiKey = async () => {
-    if (!apiKey.trim()) {
-      setKeyStatus({ message: 'Please enter an API key', type: 'error' })
+  const saveProviderSettings = async () => {
+    const currentApiKey = apiKeys[selectedProvider]
+
+    if (!currentApiKey?.trim()) {
+      setKeyStatus({ message: `Please enter an API key for ${PROVIDERS[selectedProvider].name}`, type: 'error' })
       return
     }
 
     setIsLoading(true)
     try {
-      await chrome.storage.sync.set({ geminiApiKey: apiKey.trim() })
-      setKeyStatus({ message: 'API key saved successfully!', type: 'success' })
-      
+      await chrome.storage.sync.set({
+        llmProvider: selectedProvider,
+        llmModel: selectedModel,
+        llmApiKeys: apiKeys
+      })
+      setKeyStatus({ message: 'Settings saved successfully!', type: 'success' })
+
       // Clear status after 3 seconds
       setTimeout(() => {
         setKeyStatus({ message: '', type: null })
       }, 3000)
     } catch (error) {
-      console.error('Save API key error:', error)
-      setKeyStatus({ message: 'Failed to save API key', type: 'error' })
+      console.error('Save settings error:', error)
+      setKeyStatus({ message: 'Failed to save settings', type: 'error' })
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleProviderChange = (provider: LLMProvider) => {
+    setSelectedProvider(provider)
+    // Auto-select default model for the provider
+    setSelectedModel(DEFAULT_MODELS[provider])
+  }
+
+  const handleApiKeyChange = (provider: string, value: string) => {
+    setApiKeys(prev => ({
+      ...prev,
+      [provider]: value
+    }))
   }
 
   const saveRagSettings = async () => {
@@ -178,27 +234,69 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
           </button>
           <h2>Settings</h2>
         </div>
-        
+
         <div className="settings-body">
+          {/* LLM Provider Settings */}
           <div className="setting-group">
-            <label htmlFor="geminiKey">Gemini AI Key</label>
-            <div className="input-group">
-              <input 
-                type="password" 
-                id="geminiKey" 
-                placeholder="Enter your API key" 
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && saveApiKey()}
-              />
-              <button 
-                className="save-btn" 
-                onClick={saveApiKey}
-                disabled={isLoading}
+            <h3>AI Provider Settings</h3>
+            <p className="setting-description">Configure your preferred AI provider and model for form filling</p>
+
+            {/* Provider Selection */}
+            <div className="setting-row">
+              <label htmlFor="llmProvider">AI Provider</label>
+              <select
+                id="llmProvider"
+                value={selectedProvider}
+                onChange={(e) => handleProviderChange(e.target.value as LLMProvider)}
+                className="provider-select"
               >
-                {isLoading ? 'Saving...' : 'Save'}
-              </button>
+                {Object.entries(PROVIDERS).map(([key, config]) => (
+                  <option key={key} value={key}>
+                    {config.name}
+                  </option>
+                ))}
+              </select>
             </div>
+
+            {/* Model Selection */}
+            <div className="setting-row">
+              <label htmlFor="llmModel">Model</label>
+              <select
+                id="llmModel"
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                className="model-select"
+              >
+                {PROVIDERS[selectedProvider].models.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.name} {model.description && `- ${model.description}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* API Key Input for Selected Provider */}
+            <div className="setting-row">
+              <label htmlFor="apiKey">{PROVIDERS[selectedProvider].name} API Key</label>
+              <div className="input-group">
+                <input
+                  type="password"
+                  id="apiKey"
+                  placeholder={`Enter your ${PROVIDERS[selectedProvider].name} API key`}
+                  value={apiKeys[selectedProvider]}
+                  onChange={(e) => handleApiKeyChange(selectedProvider, e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && saveProviderSettings()}
+                />
+                <button
+                  className="save-btn"
+                  onClick={saveProviderSettings}
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+
             {keyStatus.message && (
               <div className={`key-status ${keyStatus.type}`}>
                 {keyStatus.message}
