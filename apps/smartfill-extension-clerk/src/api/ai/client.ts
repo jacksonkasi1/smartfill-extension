@@ -6,7 +6,7 @@ import type { LLMProvider } from './constants'
 import { PROVIDERS, DEFAULT_PROVIDER, DEFAULT_MODELS, LLM_GENERATION_CONFIG } from './constants'
 
 // ** import utils
-import { buildPrompt } from './prompt'
+import { buildPrompt, type ModelMetadata } from './prompt'
 import { parseAIResponse } from './parser'
 
 // ** Provider Settings Interface
@@ -192,8 +192,19 @@ export async function generateFormData(fields: FormField[], customPrompt?: strin
   // Get provider settings
   const { provider, model, apiKey } = await getProviderSettings()
 
-  // Build prompt
-  const prompt = buildPrompt(fields, customPrompt)
+  // Determine if model is custom or recommended
+  const isRecommended = PROVIDERS[provider].models.some(m => m.id === model)
+  const modelType: 'recommended' | 'custom' = isRecommended ? 'recommended' : 'custom'
+
+  // Build model metadata for prompt
+  const modelMetadata: ModelMetadata = {
+    provider: PROVIDERS[provider].name,
+    modelId: model,
+    modelType
+  }
+
+  // Build prompt with model metadata
+  const prompt = buildPrompt(fields, customPrompt, modelMetadata)
 
   // Call appropriate API based on provider
   let generatedText: string

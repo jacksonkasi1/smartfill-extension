@@ -1,7 +1,19 @@
 // ** import types
 import type { FormField } from '@/types/extension'
 
-export function buildPrompt(fields: FormField[], customInstructions?: string): string {
+export interface ModelMetadata {
+  provider: string
+  modelId: string
+  modelType: 'recommended' | 'custom'
+}
+
+export function buildPrompt(fields: FormField[], customInstructions?: string, modelMetadata?: ModelMetadata): string {
+  // Add model metadata header if provided
+  let modelHeader = ''
+  if (modelMetadata) {
+    modelHeader = `[System: You are running on ${modelMetadata.provider} using model "${modelMetadata.modelId}" (${modelMetadata.modelType}). This information is for your awareness only. Do not mention it in your response unless specifically asked.]\n\n`
+  }
+
   const fieldDescriptions = fields.map(field => {
     let description = `- Field: "${field.name}" (type: ${field.type}, label: "${field.label || 'No label'}", placeholder: "${field.placeholder || 'No placeholder'}"`
     
@@ -24,7 +36,7 @@ export function buildPrompt(fields: FormField[], customInstructions?: string): s
     return description
   }).join('\n')
 
-  let basePrompt = `You are a form filling assistant. Please generate realistic test data for the following form fields. Return the data as a JSON object where keys are field names and values are appropriate test data.
+  let basePrompt = `${modelHeader}You are a form filling assistant. Please generate realistic test data for the following form fields. Return the data as a JSON object where keys are field names and values are appropriate test data.
 
 Form fields to fill:
 ${fieldDescriptions}`
