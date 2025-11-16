@@ -69,7 +69,13 @@ export interface ExtensionSettings {
   enabled: boolean;
   autoFill: boolean;
   debugMode: boolean;
-  geminiApiKey: string;
+  llmProvider: 'gemini' | 'groq' | 'openrouter';
+  llmModel: string;
+  llmApiKeys: {
+    gemini?: string;
+    groq?: string;
+    openrouter?: string;
+  };
   smartDetection: boolean;
   confirmBeforeFill: boolean;
   fillDelay: number;
