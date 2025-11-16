@@ -1086,7 +1086,7 @@ function FormFillerContent() {
 • Use company name: TechCorp Inc
 • Make me appear as a senior developer
 • Use email format: firstname.lastname@domain.com`}
-                rows={2}
+                rows={7}
                 value={promptText}
                 onChange={(e) => setPromptText(e.target.value)}
               />

@@ -67,7 +67,7 @@
 /* Main Prompt Textarea */
 .main-prompt-textarea {
   width: 100%;
-  min-height: 80px;
+  min-height: 160px;
   padding: var(--space-md);
   border: 2px solid var(--border);
   border-radius: 12px;
