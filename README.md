@@ -19,8 +19,8 @@ cp .env.example .env.local
 
 2. Fill in your API keys in `.env.local`:
    - Clerk authentication keys
-   - OpenAI API key  
-   - Gemini API key (for extension)
+   - OpenAI API key
+   - AI provider keys for the extension (Gemini, Groq, OpenAI/OpenRouter)
 
 3. Install dependencies:
 ```bash
@@ -45,7 +45,7 @@ bun run build
 
 - **NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY** & **CLERK_SECRET_KEY** - Clerk authentication
 - **OPENAI_API_KEY** - OpenAI API for RAG service
-- **GEMINI_API_KEY** - Google Gemini API for extension
+- **GEMINI_API_KEY** - (Optional) legacy Gemini API for the extension. Current builds let you configure Gemini, Groq, OpenRouter, and OpenAI keys directly inside the extension settings.
 - **NODE_ENV** - Development/production environment
 
 ## Apps Details
@@ -53,7 +53,7 @@ bun run build
 ### Browser Extension (`apps/smartfill-extension-clerk`)
 - Built with **Plasmo** framework
 - **Clerk** authentication integration
-- **Google Gemini AI** for form data generation
+- **Multi-provider AI (Gemini, Groq, OpenAI, OpenRouter)** for form data generation
 - Chrome extension with form-filling capabilities
 - **TypeScript** + **React**
 
@@ -97,7 +97,7 @@ bun run build
 
 ### AI & Authentication
 - **OpenAI** - Embeddings and completions
-- **Google Gemini AI** - Form data generation
+- **Multi-provider AI** (Gemini, Groq, OpenRouter, OpenAI) - Form data generation
 - **Clerk** - Authentication service
 
 ### Development Tools
@@ -109,7 +109,7 @@ bun run build
 
 ## Features
 
-- **AI-Powered Form Filling** - Intelligent form completion using Gemini AI and RAG
+- **AI-Powered Form Filling** - Intelligent form completion using Gemini, Groq, OpenAI, or OpenRouter models combined with RAG
 - **User Authentication** - Secure login with Clerk across all apps
 - **Knowledge Management** - Personal RAG service for each user with vector embeddings
 - **Cross-platform** - Browser extension + web dashboard
@@ -131,7 +131,7 @@ Our SmartFill agent chains together these automated steps:
 
 3. **LLM Chain Processing**
    - OpenAI for embedding generation
-   - Gemini for form field interpretation
+   - Gemini, Groq, OpenRouter, or OpenAI models for form field interpretation
    - Multi-model approach for accuracy
 
 4. **External Tool Integration**

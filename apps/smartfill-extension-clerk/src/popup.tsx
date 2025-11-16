@@ -14,6 +14,7 @@ import {
 import { ENV } from "@/config/env"
 
 // ** import apis
+import { AI_PROVIDERS, DEFAULT_AI_PROVIDER, type AIProviderKey } from "@/api/ai/constants"
 import { ragClient } from "@/api/rag"
 
 // ** import utils
@@ -53,8 +54,23 @@ const TrashIcon = ({ width = 16, height = 16, className = "" }) => (
 const EXTENSION_URL = chrome.runtime.getURL(".")
 
 function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
-  const [apiKey, setApiKey] = useState('')
-  const [keyStatus, setKeyStatus] = useState<{ message: string, type: 'success' | 'error' | null }>({ message: '', type: null })
+  const providerKeys = Object.keys(AI_PROVIDERS) as AIProviderKey[]
+  const [aiProvider, setAiProvider] = useState<AIProviderKey>(DEFAULT_AI_PROVIDER)
+  const [apiKeys, setApiKeys] = useState<Record<AIProviderKey, string>>(() => {
+    const initial = {} as Record<AIProviderKey, string>
+    providerKeys.forEach((key) => {
+      initial[key] = ''
+    })
+    return initial
+  })
+  const [models, setModels] = useState<Record<AIProviderKey, string>>(() => {
+    const initial = {} as Record<AIProviderKey, string>
+    providerKeys.forEach((key) => {
+      initial[key] = AI_PROVIDERS[key].defaultModel
+    })
+    return initial
+  })
+  const [aiStatus, setAiStatus] = useState<{ message: string, type: 'success' | 'error' | null }>({ message: '', type: null })
   const [isLoading, setIsLoading] = useState(false)
   
   // RAG Settings
@@ -74,16 +90,43 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
 
   const loadSettings = async () => {
     try {
+      const aiStorageKeys = providerKeys.flatMap((key) => {
+        const config = AI_PROVIDERS[key]
+        return [config.keyStorage, config.modelStorage]
+      })
+
       const result = await chrome.storage.sync.get([
-        'geminiApiKey', 
-        'ragEnabled', 
-        'autoRag', 
+        'aiProvider',
+        ...aiStorageKeys,
+        'ragEnabled',
+        'autoRag',
         'selectedTags'
       ])
-      
-      if (result.geminiApiKey) {
-        setApiKey(result.geminiApiKey)
-      }
+
+      const resolvedProvider =
+        typeof result.aiProvider === 'string' && result.aiProvider in AI_PROVIDERS
+          ? (result.aiProvider as AIProviderKey)
+          : DEFAULT_AI_PROVIDER
+
+      const loadedApiKeys = {} as Record<AIProviderKey, string>
+      const loadedModels = {} as Record<AIProviderKey, string>
+
+      providerKeys.forEach((key) => {
+        const config = AI_PROVIDERS[key]
+        const storedKey = result[config.keyStorage]
+        loadedApiKeys[key] = typeof storedKey === 'string' ? storedKey : ''
+
+        const storedModel = result[config.modelStorage]
+        loadedModels[key] = typeof storedModel === 'string' && storedModel.trim()
+          ? storedModel
+          : AI_PROVIDERS[key].defaultModel
+      })
+
+      setAiProvider(resolvedProvider)
+      setApiKeys(loadedApiKeys)
+      setModels(loadedModels)
+      setAiStatus({ message: '', type: null })
+
       if (result.ragEnabled !== undefined) {
         setRagEnabled(result.ragEnabled)
       }
@@ -114,24 +157,42 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
     }
   }
 
-  const saveApiKey = async () => {
-    if (!apiKey.trim()) {
-      setKeyStatus({ message: 'Please enter an API key', type: 'error' })
+  const saveAISettings = async () => {
+    const activeKey = apiKeys[aiProvider]?.trim()
+    if (!activeKey) {
+      setAiStatus({ message: `Please enter an API key for ${AI_PROVIDERS[aiProvider].label}`, type: 'error' })
+      return
+    }
+
+    const activeModel = models[aiProvider]?.trim()
+    if (!activeModel) {
+      setAiStatus({ message: 'Please enter a model name', type: 'error' })
       return
     }
 
     setIsLoading(true)
     try {
-      await chrome.storage.sync.set({ geminiApiKey: apiKey.trim() })
-      setKeyStatus({ message: 'API key saved successfully!', type: 'success' })
-      
+      const payload: Record<string, string> = {
+        aiProvider
+      }
+
+      providerKeys.forEach((key) => {
+        const config = AI_PROVIDERS[key]
+        payload[config.keyStorage] = apiKeys[key]?.trim() ?? ''
+        const modelValue = models[key]?.trim()
+        payload[config.modelStorage] = modelValue || AI_PROVIDERS[key].defaultModel
+      })
+
+      await chrome.storage.sync.set(payload)
+      setAiStatus({ message: 'AI settings saved successfully!', type: 'success' })
+
       // Clear status after 3 seconds
       setTimeout(() => {
-        setKeyStatus({ message: '', type: null })
+        setAiStatus({ message: '', type: null })
       }, 3000)
     } catch (error) {
-      console.error('Save API key error:', error)
-      setKeyStatus({ message: 'Failed to save API key', type: 'error' })
+      console.error('Save AI settings error:', error)
+      setAiStatus({ message: 'Failed to save AI settings', type: 'error' })
     } finally {
       setIsLoading(false)
     }
@@ -167,6 +228,27 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
     }
   }
 
+  const handleProviderChange = (value: string) => {
+    if (value in AI_PROVIDERS) {
+      setAiProvider(value as AIProviderKey)
+      setAiStatus({ message: '', type: null })
+    }
+  }
+
+  const handleModelChange = (value: string) => {
+    setModels(prev => ({
+      ...prev,
+      [aiProvider]: value
+    }))
+  }
+
+  const handleApiKeyChange = (value: string) => {
+    setApiKeys(prev => ({
+      ...prev,
+      [aiProvider]: value
+    }))
+  }
+
   if (!isOpen) return null;
 
   return (
@@ -181,27 +263,53 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
         
         <div className="settings-body">
           <div className="setting-group">
-            <label htmlFor="geminiKey">Gemini AI Key</label>
+            <label htmlFor="aiProvider">AI Provider</label>
+            <select
+              id="aiProvider"
+              value={aiProvider}
+              onChange={(e) => handleProviderChange(e.target.value)}
+            >
+              {providerKeys.map((key) => (
+                <option key={key} value={key}>
+                  {AI_PROVIDERS[key].label}
+                </option>
+              ))}
+            </select>
+
+            <label htmlFor="aiModel">Model</label>
+            <input
+              type="text"
+              id="aiModel"
+              placeholder={AI_PROVIDERS[aiProvider].modelPlaceholder}
+              value={models[aiProvider] ?? ''}
+              onChange={(e) => handleModelChange(e.target.value)}
+            />
+
             <div className="input-group">
-              <input 
-                type="password" 
-                id="geminiKey" 
-                placeholder="Enter your API key" 
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && saveApiKey()}
+              <input
+                type="password"
+                id="aiKey"
+                placeholder={AI_PROVIDERS[aiProvider].keyPlaceholder}
+                value={apiKeys[aiProvider] ?? ''}
+                onChange={(e) => handleApiKeyChange(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && saveAISettings()}
               />
-              <button 
-                className="save-btn" 
-                onClick={saveApiKey}
+              <button
+                className="save-btn"
+                onClick={saveAISettings}
                 disabled={isLoading}
               >
                 {isLoading ? 'Saving...' : 'Save'}
               </button>
             </div>
-            {keyStatus.message && (
-              <div className={`key-status ${keyStatus.type}`}>
-                {keyStatus.message}
+
+            <p className="setting-description">
+              Choose your preferred AI provider and model. You can store keys for multiple providers and switch at any time.
+            </p>
+
+            {aiStatus.message && (
+              <div className={`key-status ${aiStatus.type}`}>
+                {aiStatus.message}
               </div>
             )}
           </div>
@@ -703,8 +811,9 @@ function FormFillerContent() {
         }
       } else {
         const errorMessage = response?.errors?.[0] || response?.error || 'Form filling failed'
-        if (errorMessage.includes('API key')) {
-          showStatus('Please configure Gemini API key in settings', 'error')
+        const normalizedError = (errorMessage || '').toLowerCase()
+        if (normalizedError.includes('api key')) {
+          showStatus('Please configure your AI provider in settings', 'error')
         } else {
           showStatus(errorMessage, 'error')
         }

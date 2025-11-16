@@ -16,8 +16,8 @@ export default function FAQsThree() {
         {
             id: 'item-1',
             icon: 'key',
-            question: 'How do I connect my Gemini API key?',
-            answer: 'Click the ⚙️ settings icon in the left panel, paste your API key from ai.dev → Gemini, and press Save. The green dot shows when your key is active.',
+            question: 'How do I connect my AI API key?',
+            answer: 'Click the ⚙️ settings icon in the left panel, pick your provider (Gemini, Groq, OpenAI, or OpenRouter), paste the API key, choose a model, and press Save. The green dot shows when your key is active.',
         },
         {
             id: 'item-2',
@@ -35,7 +35,7 @@ export default function FAQsThree() {
             id: 'item-4',
             icon: 'bot',
             question: 'Can I use custom instructions with AI?',
-            answer: 'Yes! SmartFill supports custom instructions for AI-powered text generation. You can ask Gemini to draft, rewrite, or summarize text with your specific requirements.',
+            answer: 'Yes! SmartFill supports custom instructions for AI-powered text generation. You can ask your selected model (Gemini, Groq, ChatGPT, etc.) to draft, rewrite, or summarize text with your specific requirements.',
         },
         {
             id: 'item-5',

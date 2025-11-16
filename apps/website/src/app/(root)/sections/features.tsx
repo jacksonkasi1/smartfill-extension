@@ -41,7 +41,7 @@ export default function Features() {
                         </CardHeader>
 
                         <CardContent>
-                            <p className="mt-3 text-sm text-muted-foreground">Leverage Google Gemini AI to generate, rewrite, and summarize text directly in form fields. Create professional content with custom prompts and instructions.</p>
+                            <p className="mt-3 text-sm text-muted-foreground">Leverage your preferred AI provider (Gemini, Groq, OpenAI, or OpenRouter) to generate, rewrite, and summarize text directly in form fields. Create professional content with custom prompts and instructions.</p>
                         </CardContent>
                     </Card>
 
