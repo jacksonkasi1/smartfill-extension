@@ -403,6 +403,11 @@ function FormFillerContent() {
   const [isFormFilling, setIsFormFilling] = useState(false)
   const [statusMessage, setStatusMessage] = useState<{text: string, type: 'success' | 'error' | 'info'} | null>(null)
   const [showStatusBar, setShowStatusBar] = useState(false)
+  // Set to true once the initial chrome.storage.sync read for
+  // customInstructions / showStatusBar has finished. While false, we
+  // do NOT write back to storage — this prevents the empty initial
+  // state from clobbering the saved user context on first paint.
+  const [settingsLoaded, setSettingsLoaded] = useState(false)
 
   // Recording state (kept independent of the AI fill flow)
   const [isRecording, setIsRecording] = useState(false)
@@ -441,6 +446,8 @@ function FormFillerContent() {
         if (result.customInstructions) setPromptText(result.customInstructions)
       } catch (error) {
         console.error('Failed to load UI settings:', error)
+      } finally {
+        setSettingsLoaded(true)
       }
     }
     loadUISettings()
@@ -459,16 +466,20 @@ function FormFillerContent() {
     saveRecordingState()
   }, [isRecording, recordingStatus])
 
+  // Persist custom instructions, but only after the initial storage
+  // load has finished, and debounced so we do not write on every
+  // keystroke. Chrome sync storage has write limits; an initial empty
+  // value from a quick re-render would otherwise clobber the saved
+  // value before it has finished loading.
   useEffect(() => {
-    const saveCustomInstructions = async () => {
-      try {
-        await chrome.storage.sync.set({ customInstructions: promptText })
-      } catch (error) {
-        console.error('Failed to save custom instructions:', error)
-      }
-    }
-    saveCustomInstructions()
-  }, [promptText])
+    if (!settingsLoaded) return
+    const timer = setTimeout(() => {
+      chrome.storage.sync.set({ customInstructions: promptText }).catch((err) => {
+        console.error('Failed to save custom instructions:', err)
+      })
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [promptText, settingsLoaded])
 
   const deleteSession = async (sessionId: string) => {
     setDeletingSessionIds(prev => new Set(prev).add(sessionId))
@@ -527,7 +538,9 @@ function FormFillerContent() {
             target: { tabId: tab.id },
             files: ["content.js"]
           })
-          await new Promise(resolve => setTimeout(resolve, 500))
+          // executeScript() resolves only after the script has finished
+          // loading, so no fixed delay is needed before sending the
+          // first real message.
         } catch (scriptError) {
           showStatus("Failed to inject content script", 'error')
           return
@@ -634,14 +647,15 @@ function FormFillerContent() {
       }
 
       try {
-        await chrome.tabs.sendMessage(tab.id, { action: "ping" })
+        await chrome.tabs.sendMessage(tab.id, { action: MESSAGE_ACTIONS.FORMS.PING })
       } catch (error) {
         try {
           await chrome.scripting.executeScript({
             target: { tabId: tab.id },
             files: ["content.js"]
           })
-          await new Promise(resolve => setTimeout(resolve, 100))
+          // executeScript() resolves after the script has loaded; no
+          // artificial delay before sending the real message.
         } catch (scriptError) {
           showStatus("Failed to inject content script", 'error')
           return
@@ -649,7 +663,7 @@ function FormFillerContent() {
       }
 
       const response = await chrome.tabs.sendMessage(tab.id, {
-        action: "fillForms",
+        action: MESSAGE_ACTIONS.FORMS.FILL,
         prompt: promptText
       })
 

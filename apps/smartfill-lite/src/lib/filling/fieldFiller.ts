@@ -72,17 +72,55 @@ export function fillTextField(
 
 /**
  * Native <select> filling. Returns `false` if no option matches.
+ *
+ * Matching order:
+ *   1. exact value match
+ *   2. exact text match
+ *   3. case-insensitive exact match
+ *   4. substring match ONLY when both sides are non-empty
+ *      (a blank AI value must NEVER pick a real option via
+ *      `"Full Time".includes("")`).
+ *
+ * If the target is empty, we only select an option whose own value
+ * and text are also empty (i.e. a genuine blank / placeholder).
  */
 export function fillSelectField(element: HTMLSelectElement, value: string): boolean {
   try {
     if (!element || !element.options) return false
-    const target = String(value)
-    const option = Array.from(element.options).find(opt =>
-      opt.value === target ||
-      opt.text === target ||
-      opt.text.toLowerCase().includes(target.toLowerCase()) ||
-      target.toLowerCase().includes(opt.text.toLowerCase())
-    )
+    const target = String(value).trim()
+    const targetLower = target.toLowerCase()
+
+    const options = Array.from(element.options)
+
+    if (target === '') {
+      const blank = options.find(opt => opt.value === '' && (opt.text || '').trim() === '')
+      if (!blank) return false
+      if (HTMLSelectValueSetter) {
+        HTMLSelectValueSetter.call(element, blank.value)
+      } else {
+        element.value = blank.value
+      }
+      triggerEvents(element)
+      return true
+    }
+
+    const option = options.find(opt => {
+      const optValue = (opt.value || '').trim()
+      const optText = (opt.text || '').trim()
+      const optTextLower = optText.toLowerCase()
+      // 1. exact value
+      if (optValue === target) return true
+      // 2. exact text
+      if (optText === target) return true
+      // 3. case-insensitive exact
+      if (optTextLower === targetLower) return true
+      // 4. substring — only when both sides are non-empty
+      if (optValue && optValue.toLowerCase().includes(targetLower)) return true
+      if (optText && optTextLower.includes(targetLower)) return true
+      if (targetLower && optValue.toLowerCase().includes(targetLower)) return true
+      return false
+    })
+
     if (!option) return false
 
     if (HTMLSelectValueSetter) {
@@ -161,19 +199,23 @@ export function fillRadioField(
       `input[name="${cssEscape(name)}"][type="radio"]`
     ) as NodeListOf<HTMLInputElement>
 
-    const target = String(value).toLowerCase()
+    const target = String(value).trim()
+    const targetLower = target.toLowerCase()
     for (const radio of radios) {
-      const label =
+      const label = (
         radio.nextElementSibling?.textContent?.trim() ||
         radio.closest('label')?.textContent?.trim() ||
         radio.value ||
         radio.getAttribute('aria-label') ||
         ''
+      ).trim()
+      const lowered = label.toLowerCase()
+      if (target === '' || label === '') continue
       if (
-        label === value ||
-        label.toLowerCase() === target ||
-        label.toLowerCase().includes(target) ||
-        target.includes(label.toLowerCase())
+        label === target ||
+        lowered === targetLower ||
+        lowered.includes(targetLower) ||
+        targetLower.includes(lowered)
       ) {
         radio.focus()
         radio.checked = true
@@ -221,20 +263,28 @@ export function fillCheckboxGroup(
     const checkboxes = container.querySelectorAll(
       `input[name="${cssEscape(name)}"][type="checkbox"]`
     ) as NodeListOf<HTMLInputElement>
-    const loweredTargets = values.map(v => String(v).toLowerCase())
+    const loweredTargets = values
+      .map(v => String(v).trim().toLowerCase())
+      .filter(t => t.length > 0)
     let filled = 0
 
     for (const cb of checkboxes) {
-      const label =
+      const rawLabel =
         cb.nextElementSibling?.textContent?.trim() ||
         cb.closest('label')?.textContent?.trim() ||
         cb.value ||
         cb.getAttribute('aria-label') ||
         ''
+      const label = rawLabel.trim()
+      // Skip empty-label candidates — they can otherwise match any
+      // target via `target.includes("")`.
       const lowered = label.toLowerCase()
-      const matched = loweredTargets.some(t =>
-        lowered === t || lowered.includes(t) || t.includes(lowered)
-      )
+      let matched = false
+      if (label && loweredTargets.length > 0) {
+        matched = loweredTargets.some(t =>
+          lowered === t || (lowered && t && (lowered.includes(t) || t.includes(lowered)))
+        )
+      }
       cb.focus()
       cb.checked = matched
       triggerEvents(cb)

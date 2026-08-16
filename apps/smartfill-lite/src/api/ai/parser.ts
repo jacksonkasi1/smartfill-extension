@@ -1,54 +1,14 @@
 // ** import types
 import type { AIFormData, FormField } from '@/types/extension'
 
-const SENSITIVE_FIELD_PATTERNS = [
-  'passport', 'aadhaar', 'ssn', 'social security',
-  'credit card', 'card number', 'cvv', 'cvc',
-  'bank account', 'account number', 'iban',
-  'tax id', 'pan number', 'sin number',
-  'pin', 'password', 'secret', 'otp', '2fa', 'auth code'
-]
-
-function isSensitiveField(field: FormField): boolean {
-  const haystack = `${field.name} ${field.label || ''} ${field.placeholder || ''}`.toLowerCase()
-  return SENSITIVE_FIELD_PATTERNS.some(p => haystack.includes(p))
-}
-
-/**
- * Normalize a custom-instructions blob into a set of canonical tokens
- * that we will allow the AI to use for sensitive fields. We use a
- * fairly loose, deterministic check: any value that appears anywhere
- * in the user's context as a non-trivial substring is considered
- * "explicit". A short, well-known placeholder like `1234` would be
- * rejected because the context must contain it.
- */
-function extractAllowedContextTokens(customInstructions: string | undefined): Set<string> {
-  const tokens = new Set<string>()
-  if (!customInstructions) return tokens
-  const lowered = customInstructions.toLowerCase()
-  // Sliding 4+ character alnum tokens (loose)
-  const re = /[A-Za-z0-9][A-Za-z0-9._@/-]{3,}/g
-  let m: RegExpExecArray | null
-  while ((m = re.exec(customInstructions)) !== null) {
-    const t = m[0].toLowerCase()
-    if (t.length >= 4) tokens.add(t)
-  }
-  // Also keep the entire normalized context so full-value matches work
-  tokens.add(lowered.trim())
-  return tokens
-}
-
-function isValueExplicitInContext(value: string, tokens: Set<string>): boolean {
-  if (!value) return false
-  const v = value.toLowerCase()
-  if (v.length < 4) return false
-  if (tokens.has(v)) return true
-  // Substring: any context token that contains the value
-  for (const t of tokens) {
-    if (t.includes(v)) return true
-  }
-  return false
-}
+// ** import shared sensitive/consent helpers
+import {
+  isSensitiveField,
+  isConsentField,
+  extractExplicitContextTokens,
+  isValueExplicitInContext,
+  detectConsentDirective
+} from './sensitiveFields'
 
 /**
  * Parse the AI's raw text response into a structured AIFormData.
@@ -59,6 +19,9 @@ function isValueExplicitInContext(value: string, tokens: Set<string>): boolean {
  *     appears in the user's `customInstructions` context. This way
  *     a user who types "Passport: N1234567" can still fill the
  *     passport field, but the AI cannot invent a fake one.
+ *   - For consent fields (terms / privacy / newsletter / etc.),
+ *     default to false / unchecked unless the AI's value was
+ *     clearly instructed by the user's context.
  *   - Empty string for sensitive fields is preserved as the user's
  *     intent (the field is left blank).
  */
@@ -77,37 +40,66 @@ export function parseAIResponse(
     throw new Error(`Failed to parse AI response JSON: ${(err as Error).message}`)
   }
 
-  const contextTokens = extractAllowedContextTokens(customInstructions)
+  const contextTokens = extractExplicitContextTokens(customInstructions)
+  const consentDirective = detectConsentDirective(customInstructions)
   const cleaned: AIFormData = {}
   const missing: string[] = []
 
   for (const field of fields) {
     const raw = findValueForField(field, jsonData)
+    const sensitive = isSensitiveField(field)
+    const consent = isConsentField(field)
 
     if (raw === undefined || raw === null) {
       missing.push(field.name)
-      cleaned[field.name] = fallbackForField(field)
+      cleaned[field.name] = fallbackForField(field, sensitive, consent)
       continue
     }
 
-    // Sensitive fields: allow only if value came from explicit user context.
-    if (isSensitiveField(field)) {
-      if (raw === '') {
+    // Normalize to string for the cross-check against context. We do
+    // NOT require a minimum length here — a 3-digit CVV the user
+    // typed explicitly must be honoured.
+    const asString = normalizeToString(raw)
+    const explicit = isValueExplicitInContext(asString, contextTokens)
+
+    if (sensitive) {
+      if (asString === '') {
         cleaned[field.name] = ''
-      } else if (typeof raw === 'string' && isValueExplicitInContext(raw, contextTokens)) {
-        cleaned[field.name] = raw
-      } else if (typeof raw === 'number' || typeof raw === 'boolean') {
-        // Numbers / booleans for sensitive fields are never from context.
-        cleaned[field.name] = ''
+      } else if (explicit) {
+        cleaned[field.name] = asString
       } else {
+        // Sensitive but not in the user's context: blank it. We
+        // do this even for numbers, booleans, and short strings,
+        // because the AI should not have invented them.
         cleaned[field.name] = ''
       }
       continue
     }
 
-    // Empty string is valid for non-sensitive fields (e.g. intentionally
-    // blank "About" textarea). Pass through.
-    if (raw === '') {
+    if (consent) {
+      // Consent default = off. The AI may only set true if either:
+      //   1) the user explicitly said so in the context, OR
+      //   2) the value itself is explicit and affirmative, OR
+      //   3) the user context contains an accept-style directive.
+      if (asString === '') {
+        cleaned[field.name] = ''
+        continue
+      }
+      const truthy = isTruthyValue(raw)
+      const affirmativeValue = truthy && explicit
+      const affirmativeContext =
+        (consentDirective === 'accept' && truthy) ||
+        (consentDirective === 'decline' && !truthy)
+      if (!affirmativeValue && !affirmativeContext) {
+        // No explicit signal -> do not auto-accept.
+        cleaned[field.name] = field.type === 'checkbox' ? false : ''
+        continue
+      }
+      cleaned[field.name] = field.type === 'checkbox' ? truthy : asString
+      continue
+    }
+
+    if (asString === '') {
       cleaned[field.name] = ''
       continue
     }
@@ -137,9 +129,33 @@ function findValueForField(field: FormField, data: Record<string, any>): any {
   return bestKey !== undefined ? data[bestKey] : undefined
 }
 
+function normalizeToString(value: any): string {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string') return value.trim()
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value)
+  }
+  if (Array.isArray(value)) return value.map(v => normalizeToString(v)).join(', ')
+  if (typeof value === 'object') {
+    try { return JSON.stringify(value) } catch { return '' }
+  }
+  return String(value)
+}
+
+function isTruthyValue(value: any): boolean {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value !== 0
+  if (typeof value === 'string') {
+    const v = value.trim().toLowerCase()
+    if (v === 'true' || v === '1' || v === 'yes' || v === 'on' || v === 'checked') return true
+    if (v === 'false' || v === '0' || v === 'no' || v === 'off' || v === 'unchecked' || v === '') return false
+  }
+  return Boolean(value)
+}
+
 function normalizeValue(value: any, field: FormField): string | boolean | string[] {
   if (field.type === 'checkbox') {
-    if (Array.isArray(value)) return value.map(String)
+    if (Array.isArray(value)) return value.map(v => normalizeToString(v))
     if (typeof value === 'boolean') return value
     if (typeof value === 'string') {
       const v = value.toLowerCase()
@@ -150,21 +166,32 @@ function normalizeValue(value: any, field: FormField): string | boolean | string
     return Boolean(value)
   }
   if (field.type === 'radio' || field.type === 'select') {
-    if (Array.isArray(value)) return String(value[0] ?? '')
+    if (Array.isArray(value)) return normalizeToString(value[0] ?? '')
     if (typeof value === 'boolean') return value ? 'true' : 'false'
-    return String(value)
+    return normalizeToString(value)
   }
   if (typeof value === 'boolean') return value
-  if (Array.isArray(value)) return value.map(String).join(', ')
-  return String(value)
+  if (Array.isArray(value)) return value.map(v => normalizeToString(v))
+  return normalizeToString(value)
 }
 
-function fallbackForField(field: FormField): string | boolean | string[] {
-  if (isSensitiveField(field)) return ''
+function fallbackForField(
+  field: FormField,
+  sensitive: boolean,
+  consent: boolean
+): string | boolean | string[] {
+  // Sensitive or consent: blank / off, never a guessed value.
+  if (sensitive) return ''
+  if (consent) {
+    if (field.type === 'checkbox') return false
+    return ''
+  }
 
   if (field.type === 'checkbox') {
     if (field.options && field.options.length > 1) return [field.options[0]]
-    return Boolean(field.required) || field.name.toLowerCase().includes('terms')
+    // Single checkbox: only default to true for explicitly "required"
+    // agreement-like fields, never just because `required` is set.
+    return false
   }
   if (field.type === 'radio' || field.type === 'select') {
     return field.options?.[0] ?? ''

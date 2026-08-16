@@ -29,6 +29,31 @@ export interface AIResult {
   }
 }
 
+/** Maximum time we wait for any single AI provider response. */
+const PROVIDER_TIMEOUT_MS = 30_000
+
+/**
+ * fetch() with a hard timeout. Aborts the request when the timeout
+ * elapses so the UI never hangs on a slow or stuck provider.
+ */
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number = PROVIDER_TIMEOUT_MS
+): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { ...init, signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+function timeoutErrorMessage(): string {
+  return 'AI request timed out. Please try again.'
+}
+
 async function getProviderSettings(): Promise<ProviderSettings> {
   const result = await chrome.storage.sync.get([
     'llmProvider', 'llmModel', 'llmApiKeys'
@@ -45,13 +70,17 @@ async function getProviderSettings(): Promise<ProviderSettings> {
 
 async function callGeminiAPI(prompt: string, model: string, apiKey: string): Promise<string> {
   const url = `${PROVIDERS.gemini.baseUrl}/${model}:generateContent?key=${apiKey}`
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }]
+  let response: Response
+  try {
+    response = await fetchWithTimeout(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
     })
-  })
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') throw new Error(timeoutErrorMessage())
+    throw err
+  }
   if (!response.ok) {
     let message = `Gemini API error: ${response.status} ${response.statusText}`
     try {
@@ -68,16 +97,22 @@ async function callGeminiAPI(prompt: string, model: string, apiKey: string): Pro
 
 async function callGroqAPI(prompt: string, model: string, apiKey: string): Promise<string> {
   const url = `${PROVIDERS.groq.baseUrl}/chat/completions`
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: 'user', content: prompt }],
-      temperature: LLM_GENERATION_CONFIG.temperature,
-      max_tokens: LLM_GENERATION_CONFIG.maxTokens
+  let response: Response
+  try {
+    response = await fetchWithTimeout(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: LLM_GENERATION_CONFIG.temperature,
+        max_tokens: LLM_GENERATION_CONFIG.maxTokens
+      })
     })
-  })
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') throw new Error(timeoutErrorMessage())
+    throw err
+  }
   if (!response.ok) {
     let message = `Groq API error: ${response.status} ${response.statusText}`
     try {
@@ -94,21 +129,27 @@ async function callGroqAPI(prompt: string, model: string, apiKey: string): Promi
 
 async function callOpenRouterAPI(prompt: string, model: string, apiKey: string): Promise<string> {
   const url = `${PROVIDERS.openrouter.baseUrl}/chat/completions`
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-      'HTTP-Referer': 'https://github.com/jacksonkasi1/smartfill-extension',
-      'X-Title': 'SmartFill Extension'
-    },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: 'user', content: prompt }],
-      temperature: LLM_GENERATION_CONFIG.temperature,
-      max_tokens: LLM_GENERATION_CONFIG.maxTokens
+  let response: Response
+  try {
+    response = await fetchWithTimeout(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'HTTP-Referer': 'https://github.com/jacksonkasi1/smartfill-extension',
+        'X-Title': 'SmartFill Extension'
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: LLM_GENERATION_CONFIG.temperature,
+        max_tokens: LLM_GENERATION_CONFIG.maxTokens
+      })
     })
-  })
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') throw new Error(timeoutErrorMessage())
+    throw err
+  }
   if (!response.ok) {
     let message = `OpenRouter API error: ${response.status} ${response.statusText}`
     try {

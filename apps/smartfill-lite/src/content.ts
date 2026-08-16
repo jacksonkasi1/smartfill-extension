@@ -153,9 +153,16 @@ async function fillForms(customPrompt?: string): Promise<FillResult> {
 // Recording helpers (unchanged structurally)
 // ---------------------------------------------------------------------------
 function generateSelector(element: Element): string {
-  if (element.id) return `#${element.id}`
-  if (element.className) {
-    const classes = element.className.split(' ').filter(c => c.trim()).join('.')
+  if (element.id) {
+    return `#${safeEscape(element.id)}`
+  }
+  // classList works for HTMLElement and SVGElement; className.split
+  // can return a non-string (SVGAnimatedString) for SVG nodes.
+  if (element.classList && element.classList.length > 0) {
+    const classes = Array.from(element.classList)
+      .map(c => safeEscape(c))
+      .filter(Boolean)
+      .join('.')
     if (classes) return `.${classes}`
   }
   const tagName = element.tagName.toLowerCase()
@@ -168,6 +175,15 @@ function generateSelector(element: Element): string {
     }
   }
   return tagName
+}
+
+function safeEscape(value: string): string {
+  if (!value) return ''
+  const css = (window as any).CSS
+  if (css && typeof css.escape === 'function') return css.escape(value)
+  // Minimal fallback: escape characters that have meaning in CSS
+  // selectors. Good enough for the few real-world class names we see.
+  return value.replace(/(["\\:#.>+~*[\]()'\s,])/g, '\\$1')
 }
 
 async function startRecording(): Promise<{ success: boolean, error?: string }> {

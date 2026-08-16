@@ -65,7 +65,13 @@ function formatDateValue(value: string): string {
 
   const parsedDate = new Date(value)
   if (!isNaN(parsedDate.getTime())) {
-    return parsedDate.toISOString().split('T')[0]
+    // Use local calendar components so the user-entered date is not
+    // shifted by UTC conversion (toISOString() can roll back a day
+    // for users east of UTC).
+    const y = parsedDate.getFullYear()
+    const m = (parsedDate.getMonth() + 1).toString().padStart(2, '0')
+    const d = parsedDate.getDate().toString().padStart(2, '0')
+    return `${y}-${m}-${d}`
   }
 
   return value

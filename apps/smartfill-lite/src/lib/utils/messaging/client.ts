@@ -143,10 +143,13 @@ export class WebsiteEvents {
   }
 
   /**
-   * Send a message to the website
+   * Send a message to the website. We pin the target origin to the
+   * current page rather than the wildcard `'*'` so other extensions
+   * or cross-origin frames cannot intercept these events.
    */
   static sendToWebsite(data: MessagingTypes.WebsiteEventData): void {
-    window.postMessage(data, '*')
+    const target = typeof window !== 'undefined' ? window.location.origin : '*'
+    window.postMessage(data, target)
   }
 
   /**
@@ -166,10 +169,14 @@ export class WebsiteEvents {
   }
 
   /**
-   * Listen for website messages
+   * Listen for website messages. Verifies that the message came from
+   * the same window and the same origin, and matches the SmartFill
+   * extension event shape.
    */
   static onWebsiteMessage(callback: (data: MessagingTypes.WebsiteEventData) => void): () => void {
     const handler = (event: MessageEvent) => {
+      if (event.source !== window) return
+      if (event.origin !== window.location.origin) return
       if (event.data?.type === 'SMARTFILL_OPEN_EXTENSION' && event.data?.source === 'website') {
         callback(event.data)
       }
