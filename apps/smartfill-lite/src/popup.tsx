@@ -1,23 +1,8 @@
 // ** import core packages
 import React, { useState, useEffect } from "react"
 
-// ** import third party
-import {
-  ClerkProvider,
-  SignedIn,
-  SignedOut,
-  useUser,
-  useClerk
-} from "@clerk/chrome-extension"
-
 // ** import types
 import type { LLMProvider } from "@/api/ai/constants"
-
-// ** import config
-import { ENV } from "@/config/env"
-
-// ** import apis
-import { ragClient } from "@/api/rag"
 
 // ** import constants
 import { PROVIDERS, DEFAULT_PROVIDER, DEFAULT_MODELS } from "@/api/ai/constants"
@@ -32,21 +17,19 @@ import "./styles/index.css"
 import iconUrl from "data-base64:~assets/icons/icon.png"
 
 // ** import icons
-import { 
-  DownloadIcon, 
-  UploadIcon, 
-  RefreshIcon, 
-  UserIcon,
+import {
+  DownloadIcon,
+  UploadIcon,
+  RefreshIcon,
   ArrowLeftIcon,
   CloseIcon,
-  SignOutIcon,
   SettingsIcon,
   MenuIcon,
   RecordIcon,
   StopIcon
 } from "./assets/ts-icons"
 
-// Add TrashIcon component
+// Simple inline trash icon (kept local so we don't have to add an extra icon file)
 const TrashIcon = ({ width = 16, height = 16, className = "" }) => (
   <svg width={width} height={height} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="3,6 5,6 21,6"></polyline>
@@ -56,10 +39,11 @@ const TrashIcon = ({ width = 16, height = 16, className = "" }) => (
   </svg>
 )
 
-const EXTENSION_URL = chrome.runtime.getURL(".")
-
+// ---------------------------------------------------------------------------
+// SettingsModal — AI provider, model, API key, and recording export/import.
+// No auth, no RAG.
+// ---------------------------------------------------------------------------
 function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
-  // LLM Provider Settings
   const [selectedProvider, setSelectedProvider] = useState<LLMProvider>(DEFAULT_PROVIDER)
   const [modelType, setModelType] = useState<'recommended' | 'custom'>('recommended')
   const [selectedModel, setSelectedModel] = useState<string>('')
@@ -73,27 +57,11 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
   })
   const [keyStatus, setKeyStatus] = useState<{ message: string, type: 'success' | 'error' | null }>({ message: '', type: null })
   const [isLoading, setIsLoading] = useState(false)
-
-  // RAG Settings
-  const [ragEnabled, setRagEnabled] = useState(true)
-  const [autoRag, setAutoRag] = useState(true)
-  const [selectedTags, setSelectedTags] = useState<string[]>([])
-  const [availableTags, setAvailableTags] = useState<string[]>([])
-  const [ragStatus, setRagStatus] = useState<{ message: string, type: 'success' | 'error' | null }>({ message: '', type: null })
-  const [tagsLoading, setTagsLoading] = useState(false)
-
-  // UI Settings
   const [showStatusBar, setShowStatusBar] = useState(false)
 
-  // Load existing settings on mount
   useEffect(() => {
-    if (isOpen) {
-      loadSettings()
-    }
+    if (isOpen) loadSettings()
   }, [isOpen])
-
-  // Note: Removed the auto-reset useEffect that was overriding loaded settings
-  // The provider change is now handled only in handleProviderChange
 
   const loadSettings = async () => {
     try {
@@ -101,22 +69,16 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
         'llmProvider',
         'llmModel',
         'llmApiKeys',
-        'ragEnabled',
-        'autoRag',
-        'selectedTags',
         'showStatusBar'
       ])
 
-      // Load provider settings
-      const provider = result.llmProvider || DEFAULT_PROVIDER
+      const provider: LLMProvider = (result.llmProvider as LLMProvider) || DEFAULT_PROVIDER
       setSelectedProvider(provider)
 
-      // Load model
-      const model = result.llmModel || DEFAULT_MODELS[provider]
+      const model: string = (result.llmModel as string) || DEFAULT_MODELS[provider]
       setSelectedModel(model)
 
-      // Check if model is in recommended list
-      const isRecommended = PROVIDERS[provider].models.some(m => m.id === model)
+      const isRecommended = PROVIDERS[provider].models.some((m: { id: string }) => m.id === model)
       if (!isRecommended && model) {
         setModelType('custom')
         setCustomModel(model)
@@ -124,48 +86,16 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
         setModelType('recommended')
       }
 
-      // Load API keys
       const loadedApiKeys = result.llmApiKeys || {}
-
       setApiKeys({
         gemini: loadedApiKeys.gemini || '',
         groq: loadedApiKeys.groq || '',
         openrouter: loadedApiKeys.openrouter || ''
       })
 
-      // Load RAG settings
-      if (result.ragEnabled !== undefined) {
-        setRagEnabled(result.ragEnabled)
-      }
-      if (result.autoRag !== undefined) {
-        setAutoRag(result.autoRag)
-      }
-      if (result.selectedTags) {
-        setSelectedTags(result.selectedTags)
-      }
-
-      // Load UI settings
-      if (result.showStatusBar !== undefined) {
-        setShowStatusBar(result.showStatusBar)
-      }
-
-      // Load available tags from the backend
-      await loadAvailableTags()
+      if (result.showStatusBar !== undefined) setShowStatusBar(result.showStatusBar)
     } catch (error) {
       console.error('Failed to load settings:', error)
-    }
-  }
-
-  const loadAvailableTags = async () => {
-    setTagsLoading(true)
-    try {
-      const tags = await ragClient.getAvailableTags()
-      setAvailableTags(tags)
-    } catch (error) {
-      console.error('Failed to load available tags:', error)
-      setAvailableTags([])
-    } finally {
-      setTagsLoading(false)
     }
   }
 
@@ -185,11 +115,7 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
         llmApiKeys: apiKeys
       })
       setKeyStatus({ message: 'Settings saved successfully!', type: 'success' })
-
-      // Clear status after 3 seconds
-      setTimeout(() => {
-        setKeyStatus({ message: '', type: null })
-      }, 3000)
+      setTimeout(() => setKeyStatus({ message: '', type: null }), 3000)
     } catch (error) {
       console.error('Save settings error:', error)
       setKeyStatus({ message: 'Failed to save settings', type: 'error' })
@@ -201,7 +127,6 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
   const handleProviderChange = (provider: LLMProvider) => {
     setSelectedProvider(provider)
     setProviderDropdownOpen(false)
-    // Auto-select default model for the provider
     const defaultModel = DEFAULT_MODELS[provider]
     setSelectedModel(defaultModel)
     setModelType('recommended')
@@ -229,40 +154,7 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
   }
 
   const handleApiKeyChange = (provider: string, value: string) => {
-    setApiKeys(prev => ({
-      ...prev,
-      [provider]: value
-    }))
-  }
-
-  const saveRagSettings = async () => {
-    setIsLoading(true)
-    try {
-      await chrome.storage.sync.set({ 
-        ragEnabled, 
-        autoRag, 
-        selectedTags
-      })
-      setRagStatus({ message: 'Knowledge settings saved successfully!', type: 'success' })
-      
-      // Clear status after 3 seconds
-      setTimeout(() => {
-        setRagStatus({ message: '', type: null })
-      }, 3000)
-    } catch (error) {
-      console.error('Save RAG settings error:', error)
-      setRagStatus({ message: 'Failed to save knowledge settings', type: 'error' })
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const toggleTag = (tag: string) => {
-    if (selectedTags.includes(tag)) {
-      setSelectedTags(selectedTags.filter(t => t !== tag))
-    } else {
-      setSelectedTags([...selectedTags, tag])
-    }
+    setApiKeys(prev => ({ ...prev, [provider]: value }))
   }
 
   const saveUISettings = async () => {
@@ -273,7 +165,7 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
     }
   }
 
-  if (!isOpen) return null;
+  if (!isOpen) return null
 
   return (
     <div className={`settings-modal ${isOpen ? '' : 'hidden'}`}>
@@ -286,14 +178,13 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
         </div>
 
         <div className="settings-body">
-          {/* LLM Provider Settings */}
+          {/* AI Provider Settings */}
           <div className="setting-group">
-            <h3>AI Provider Settings</h3>
+            <h3>AI Provider</h3>
             <p className="setting-description">Configure your preferred AI provider and model for form filling</p>
 
-            {/* Provider Selection - Custom Dropdown */}
             <div className="setting-row">
-              <label>AI Provider</label>
+              <label>Provider</label>
               <div className="custom-select-wrapper">
                 <button
                   type="button"
@@ -323,9 +214,8 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
               </div>
             </div>
 
-            {/* Model Type Toggle */}
             <div className="setting-row">
-              <label>Model Selection</label>
+              <label>Model</label>
               <div className="model-type-toggle">
                 <button
                   type="button"
@@ -344,7 +234,6 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
               </div>
             </div>
 
-            {/* Model Selection - Conditional */}
             <div className="setting-row">
               <label>{modelType === 'recommended' ? 'Select Model' : 'Custom Model ID'}</label>
               {modelType === 'recommended' ? (
@@ -393,7 +282,6 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
               )}
             </div>
 
-            {/* API Key Input for Selected Provider */}
             <div className="setting-row">
               <label htmlFor="apiKey">{PROVIDERS[selectedProvider].name} API Key</label>
               <div className="input-group">
@@ -421,7 +309,6 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
               </div>
             )}
 
-            {/* Active Configuration Indicator */}
             <div className="active-config-indicator">
               <div className="config-label">Active Configuration:</div>
               <div className="config-details">
@@ -435,9 +322,9 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
             </div>
           </div>
 
-          {/* UI Settings */}
+          {/* Display Settings */}
           <div className="setting-group">
-            <h3>Display Settings</h3>
+            <h3>Display</h3>
             <p className="setting-description">Customize the extension's user interface</p>
 
             <div className="setting-row">
@@ -455,79 +342,7 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
             </div>
           </div>
 
-          {/* RAG Knowledge Settings */}
-          <div className="setting-group">
-            <h3>Knowledge Settings</h3>
-            <p className="setting-description">Configure how AI uses your knowledge base for form filling</p>
-
-            <div className="setting-row">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={ragEnabled}
-                  onChange={(e) => setRagEnabled(e.target.checked)}
-                />
-                <span>Enable knowledge search</span>
-              </label>
-            </div>
-
-            {ragEnabled && (
-              <>
-                <div className="setting-row">
-                  <label className="checkbox-label">
-                    <input 
-                      type="checkbox" 
-                      checked={autoRag}
-                      onChange={(e) => setAutoRag(e.target.checked)}
-                    />
-                    <span>Auto-select relevant knowledge (recommended)</span>
-                  </label>
-                </div>
-
-                {!autoRag && (
-                  <div className="setting-row">
-                    <h4>Knowledge Tags</h4>
-                    <p className="setting-subdescription">Select which types of knowledge to use:</p>
-                    {tagsLoading ? (
-                      <div className="tags-loading">Loading tags...</div>
-                    ) : availableTags.length > 0 ? (
-                      <div className="tags-container">
-                        {availableTags.map(tag => (
-                          <button
-                            key={tag}
-                            type="button"
-                            className={`tag-btn ${selectedTags.includes(tag) ? 'selected' : ''}`}
-                            onClick={() => toggleTag(tag)}
-                          >
-                            {tag}
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="no-tags">No tags available. Add some knowledge with tags first.</div>
-                    )}
-                  </div>
-                )}
-
-                <div className="input-group">
-                  <button 
-                    className="save-btn" 
-                    onClick={saveRagSettings}
-                    disabled={isLoading}
-                  >
-                    {isLoading ? 'Saving...' : 'Save Knowledge Settings'}
-                  </button>
-                </div>
-
-                {ragStatus.message && (
-                  <div className={`key-status ${ragStatus.type}`}>
-                    {ragStatus.message}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-
+          {/* Export / Import sessions — kept from the recording feature */}
           <div className="setting-group">
             <h3>Export Sessions</h3>
             <p className="setting-description">Download your recording sessions as JSON files</p>
@@ -552,7 +367,7 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
                 <UploadIcon width={20} height={20} />
                 Choose File
               </label>
-              <input type="file" id="importFile" accept=".json" style={{ display: 'none' }} />
+              <input type="file" id="importFile" accept=".json" style={{ display: "none" }} />
               <div className="import-options">
                 <label className="checkbox-label">
                   <input type="checkbox" id="overwriteExisting" />
@@ -573,78 +388,21 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
         </div>
       </div>
     </div>
-  );
+  )
 }
 
-function UserProfileModal({ isOpen, onClose, user }: { isOpen: boolean, onClose: () => void, user: any }) {
-  const { signOut } = useClerk()
-  
-  const handleSignOut = async () => {
-    try {
-      await signOut({
-        redirectUrl: `${ENV.CLERK_SYNC_HOST}/?signout=extension`
-      })
-      onClose()
-    } catch (error) {
-      chrome.tabs.create({ 
-        url: `${ENV.CLERK_SYNC_HOST}/?signout=extension`,
-        active: true
-      })
-      onClose()
-      window.close()
-    }
-  }
-
-  if (!isOpen) return null;
-
-  return (
-    <div className={`user-profile-modal ${isOpen ? 'open' : ''}`}>
-      <div className="user-profile-overlay" onClick={onClose}></div>
-      <div className="user-profile-content">
-        <div className="user-profile-header">
-          <button className="close-profile-btn" aria-label="Close" onClick={onClose}>
-            <CloseIcon width={20} height={20} />
-          </button>
-        </div>
-        
-        <div className="user-profile-body">
-          <div className="user-profile-info">
-            <div 
-              className="user-profile-avatar"
-              style={{
-                backgroundImage: user?.imageUrl ? `url(${user.imageUrl})` : undefined
-              }}
-            >
-              {!user?.imageUrl && (user?.firstName ? user.firstName[0].toUpperCase() : 'U')}
-            </div>
-            <div className="user-profile-details">
-              <div className="user-profile-name">{user?.firstName || 'User'}</div>
-              <div className="user-profile-email">{user?.primaryEmailAddress?.emailAddress || 'No email'}</div>
-            </div>
-          </div>
-          
-          <button className="user-profile-signout" onClick={handleSignOut}>
-            <SignOutIcon width={20} height={20} />
-            Sign out
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
+// ---------------------------------------------------------------------------
+// FormFillerContent — simple, no auth.
+// ---------------------------------------------------------------------------
 function FormFillerContent() {
-  const { user, isSignedIn } = useUser()
-  const clerk = useClerk()
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [userProfileOpen, setUserProfileOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState('formFill')
   const [promptText, setPromptText] = useState('')
   const [isFormFilling, setIsFormFilling] = useState(false)
   const [statusMessage, setStatusMessage] = useState<{text: string, type: 'success' | 'error' | 'info'} | null>(null)
   const [showStatusBar, setShowStatusBar] = useState(false)
-  
-  // Recording states
+
+  // Recording state (kept independent of the AI fill flow)
   const [isRecording, setIsRecording] = useState(false)
   const [recordingStatus, setRecordingStatus] = useState('Ready to record')
   const [sessions, setSessions] = useState<any[]>([])
@@ -654,18 +412,14 @@ function FormFillerContent() {
   const togglePage = async () => {
     const newPage = currentPage === 'formFill' ? 'recordSession' : 'formFill'
     setCurrentPage(newPage)
-    // Save current page to storage for persistence
     await chrome.storage.local.set({ currentPage: newPage })
   }
 
-  // Load saved current page and recording state on mount
   useEffect(() => {
     const loadSavedState = async () => {
       try {
         const result = await chrome.storage.local.get(['currentPage', 'recordingState'])
-        if (result.currentPage) {
-          setCurrentPage(result.currentPage)
-        }
+        if (result.currentPage) setCurrentPage(result.currentPage)
         if (result.recordingState) {
           setIsRecording(result.recordingState.isRecording)
           setRecordingStatus(result.recordingState.status)
@@ -677,17 +431,12 @@ function FormFillerContent() {
     loadSavedState()
   }, [])
 
-  // Load UI settings and custom instructions on mount
   useEffect(() => {
     const loadUISettings = async () => {
       try {
         const result = await chrome.storage.sync.get(['showStatusBar', 'customInstructions'])
-        if (result.showStatusBar !== undefined) {
-          setShowStatusBar(result.showStatusBar)
-        }
-        if (result.customInstructions) {
-          setPromptText(result.customInstructions)
-        }
+        if (result.showStatusBar !== undefined) setShowStatusBar(result.showStatusBar)
+        if (result.customInstructions) setPromptText(result.customInstructions)
       } catch (error) {
         console.error('Failed to load UI settings:', error)
       }
@@ -695,15 +444,11 @@ function FormFillerContent() {
     loadUISettings()
   }, [])
 
-  // Save recording state to storage whenever it changes
   useEffect(() => {
     const saveRecordingState = async () => {
       try {
         await chrome.storage.local.set({
-          recordingState: {
-            isRecording,
-            status: recordingStatus
-          }
+          recordingState: { isRecording, status: recordingStatus }
         })
       } catch (error) {
         console.error('Failed to save recording state:', error)
@@ -712,7 +457,6 @@ function FormFillerContent() {
     saveRecordingState()
   }, [isRecording, recordingStatus])
 
-  // Save custom instructions whenever they change
   useEffect(() => {
     const saveCustomInstructions = async () => {
       try {
@@ -726,18 +470,13 @@ function FormFillerContent() {
 
   const deleteSession = async (sessionId: string) => {
     setDeletingSessionIds(prev => new Set(prev).add(sessionId))
-    
     try {
       const result = await chrome.storage.local.get(['recordingSessions'])
       const allSessions = result.recordingSessions || []
       const filteredSessions = allSessions.filter((session: any) => session.id !== sessionId)
-      
       await chrome.storage.local.set({ recordingSessions: filteredSessions })
-      
-      // Update local state
       setSessions(prev => prev.filter(session => session.id !== sessionId))
       showStatus('Session deleted successfully!', 'success')
-      
     } catch (error) {
       console.error('Error deleting session:', error)
       showStatus('Failed to delete session', 'error')
@@ -764,39 +503,7 @@ function FormFillerContent() {
     }
   }
 
-  // Store auth token for popup context (fallback when background script approach fails)
-  const storeAuthToken = async () => {
-    if (isSignedIn && clerk.session) {
-      try {
-        const token = await clerk.session.getToken()
-        if (token) {
-          // Store token with 30-minute expiry
-          const expiryTime = Date.now() + (30 * 60 * 1000)
-          await chrome.storage.local.set({
-            authToken: token,
-            authTokenExpiry: expiryTime.toString()
-          })
-        }
-      } catch (error) {
-        console.error('Popup: Failed to store auth token:', error)
-      }
-    } else {
-      // Clear token if not signed in
-      await chrome.storage.local.remove(['authToken', 'authTokenExpiry'])
-    }
-  }
-
-  // Store auth token when user signs in or component mounts (for popup fallback)
-  useEffect(() => {
-    storeAuthToken()
-  }, [isSignedIn])
-
-  const handleSignIn = () => {
-    chrome.tabs.create({ url: `${ENV.CLERK_SYNC_HOST}/?auth=extension` })
-    window.close()
-  }
-
-  // Recording functions
+  // Recording
   const startRecording = async () => {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
@@ -804,48 +511,35 @@ function FormFillerContent() {
         showStatus("No active tab found", 'error')
         return
       }
-
-      // Check for browser internal pages
-      if (tab.url?.startsWith('chrome://') || tab.url?.startsWith('chrome-extension://') || 
+      if (tab.url?.startsWith('chrome://') || tab.url?.startsWith('chrome-extension://') ||
           tab.url?.startsWith('about:') || tab.url?.startsWith('edge://')) {
         showStatus("Cannot record on browser internal pages", 'error')
         return
       }
 
-      console.log("Attempting to start recording on tab:", tab.id)
-
-      // Inject content script if needed
       try {
         await chrome.tabs.sendMessage(tab.id, { action: MESSAGE_ACTIONS.FORMS.PING })
-        console.log("Content script already injected")
       } catch (error) {
-        console.log("Content script not found, injecting...")
         try {
           await chrome.scripting.executeScript({
             target: { tabId: tab.id },
             files: ["content.js"]
           })
-          await new Promise(resolve => setTimeout(resolve, 500)) // Longer delay
-          console.log("Content script injected successfully")
+          await new Promise(resolve => setTimeout(resolve, 500))
         } catch (scriptError) {
-          console.error("Failed to inject content script:", scriptError)
           showStatus("Failed to inject content script", 'error')
           return
         }
       }
 
-      // Start recording
-      console.log("Sending start recording message...")
       const response = await chrome.tabs.sendMessage(tab.id, { action: MESSAGE_ACTIONS.RECORDING.START })
-      console.log("Recording response:", response)
-      
+
       if (response?.success) {
         setIsRecording(true)
         setRecordingStatus('Recording in progress...')
         showStatus('Recording started!', 'success')
       } else {
         const errorMsg = response?.error || 'Failed to start recording'
-        console.error("Recording failed:", errorMsg)
         showStatus(errorMsg, 'error')
       }
     } catch (error) {
@@ -861,13 +555,12 @@ function FormFillerContent() {
         showStatus("No active tab found", 'error')
         return
       }
-
       const response = await chrome.tabs.sendMessage(tab.id, { action: MESSAGE_ACTIONS.RECORDING.STOP })
       if (response?.success) {
         setIsRecording(false)
         setRecordingStatus('Ready to record')
         showStatus('Recording stopped and saved!', 'success')
-        loadSessions() // Refresh sessions list
+        loadSessions()
       } else {
         showStatus('Failed to stop recording', 'error')
       }
@@ -882,12 +575,10 @@ function FormFillerContent() {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
       if (!tab?.url) return
-      
       const domain = new URL(tab.url).hostname
       const result = await chrome.storage.local.get(['recordingSessions'])
       const allSessions = result.recordingSessions || []
       const domainSessions = allSessions.filter((session: any) => session.domain === domain)
-      console.log('Loaded sessions for domain', domain, ':', domainSessions)
       setSessions(domainSessions)
     } catch (error) {
       console.error("Error loading sessions:", error)
@@ -904,47 +595,37 @@ function FormFillerContent() {
         showStatus("No active tab found", 'error')
         return
       }
-
       showStatus('Starting playback...', 'info')
-      const response = await chrome.tabs.sendMessage(tab.id, { 
-        action: MESSAGE_ACTIONS.RECORDING.PLAY, 
-        sessionId 
+      const response = await chrome.tabs.sendMessage(tab.id, {
+        action: MESSAGE_ACTIONS.RECORDING.PLAY,
+        sessionId
       })
-      
-      if (response?.success) {
-        showStatus('Playback completed!', 'success')
-      } else {
-        showStatus('Playback failed', 'error')
-      }
+      if (response?.success) showStatus('Playback completed!', 'success')
+      else showStatus('Playback failed', 'error')
     } catch (error) {
       console.error("Error playing session:", error)
       showStatus('Playback failed', 'error')
     }
   }
 
-  // Load sessions when switching to record page
   useEffect(() => {
-    if (currentPage === 'recordSession') {
-      loadSessions()
-    }
+    if (currentPage === 'recordSession') loadSessions()
   }, [currentPage])
 
-
+  // Main fill handler — sends the custom prompt (context) and the page's
+  // form fields to the AI, then fills the result back. No auth, no RAG.
   const handleFillForms = async () => {
-    if (isFormFilling) return // Prevent multiple clicks
-    
+    if (isFormFilling) return
     setIsFormFilling(true)
     setStatusMessage({ text: 'Initializing...', type: 'info' })
-    
+
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
       if (!tab?.id) {
         showStatus("No active tab found", 'error')
         return
       }
-
-      // Check for browser internal pages
-      if (tab.url?.startsWith('chrome://') || tab.url?.startsWith('chrome-extension://') || 
+      if (tab.url?.startsWith('chrome://') || tab.url?.startsWith('chrome-extension://') ||
           tab.url?.startsWith('about:') || tab.url?.startsWith('edge://')) {
         showStatus("Cannot run on browser internal pages", 'error')
         return
@@ -958,7 +639,6 @@ function FormFillerContent() {
             target: { tabId: tab.id },
             files: ["content.js"]
           })
-          // Small delay to allow content script to load
           await new Promise(resolve => setTimeout(resolve, 100))
         } catch (scriptError) {
           showStatus("Failed to inject content script", 'error')
@@ -966,22 +646,10 @@ function FormFillerContent() {
         }
       }
 
-      // Listen for status updates from content script
-      const statusListener = (message: any) => {
-        if (message.action === 'STATUS_UPDATE' && message.status) {
-          setStatusMessage({ text: message.status, type: 'info' })
-        }
-      }
-      
-      chrome.runtime.onMessage.addListener(statusListener)
-
-      const response = await chrome.tabs.sendMessage(tab.id, { 
-        action: "fillForms", 
-        prompt: promptText 
+      const response = await chrome.tabs.sendMessage(tab.id, {
+        action: "fillForms",
+        prompt: promptText
       })
-
-      // Remove listener after completion
-      chrome.runtime.onMessage.removeListener(statusListener)
 
       if (response?.success) {
         const filled = response.filled || 0
@@ -993,7 +661,7 @@ function FormFillerContent() {
       } else {
         const errorMessage = response?.errors?.[0] || response?.error || 'Form filling failed'
         if (errorMessage.includes('API key')) {
-          showStatus('Please configure Gemini API key in settings', 'error')
+          showStatus('Please configure your AI provider API key in settings', 'error')
         } else {
           showStatus(errorMessage, 'error')
         }
@@ -1014,10 +682,9 @@ function FormFillerContent() {
   return (
     <>
       <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
-      <UserProfileModal isOpen={userProfileOpen} onClose={() => setUserProfileOpen(false)} user={user} />
-      
+
       <div className="container">
-        {/* Simplified Header */}
+        {/* Header — no auth controls. */}
         <div className="header">
           <div className="header-left-buttons">
             <button className="settings-btn" aria-label="Settings" onClick={() => setSettingsOpen(true)}>
@@ -1033,38 +700,18 @@ function FormFillerContent() {
             </div>
           </div>
           <div className="header-right">
-            <SignedOut>
-              <button className="auth-avatar-btn-small" onClick={handleSignIn} title="Sign in">
-                <UserIcon width={16} height={16} />
-              </button>
-            </SignedOut>
-            <SignedIn>
-              <button 
-                className="user-avatar-small" 
-                onClick={() => setUserProfileOpen(true)} 
-                title="Profile"
-                style={{
-                  backgroundImage: user?.imageUrl ? `url(${user.imageUrl})` : undefined
-                }}
-              >
-                {!user?.imageUrl && (user?.firstName ? user.firstName[0].toUpperCase() : 'U')}
-              </button>
-            </SignedIn>
+            {/* No account controls */}
           </div>
         </div>
 
-
-        {/* Status Display - Only show if enabled in settings */}
         {showStatusBar && statusMessage && (
           <div className={`status ${statusMessage.type}`}>
             {statusMessage.text}
           </div>
         )}
-        
-        {/* Form Fill Page */}
+
         {currentPage === 'formFill' && (
           <div id="formFillPage" className="page-content">
-            {/* Custom Prompt Section */}
             <div className="prompt-section">
               <div className="prompt-header">
                 <label htmlFor="mainPromptText" className="prompt-label">Custom Instructions (Optional)</label>
@@ -1091,10 +738,9 @@ function FormFillerContent() {
                 onChange={(e) => setPromptText(e.target.value)}
               />
             </div>
-            
-            {/* Primary Action */}
-            <button 
-              className={`primary-btn ${isFormFilling ? 'loading' : ''}`} 
+
+            <button
+              className={`primary-btn ${isFormFilling ? 'loading' : ''}`}
               onClick={handleFillForms}
               disabled={isFormFilling}
             >
@@ -1110,7 +756,6 @@ function FormFillerContent() {
           </div>
         )}
 
-        {/* Record Session Page */}
         {currentPage === 'recordSession' && (
           <div id="recordSessionPage" className="page-content">
             <div className="recording-section">
@@ -1118,10 +763,10 @@ function FormFillerContent() {
                 <span className={`status-dot ${isRecording ? 'recording' : ''}`} id="statusDot"></span>
                 <span className="status-text" id="statusText">{recordingStatus}</span>
               </div>
-              
+
               <div className="recording-buttons">
                 {!isRecording ? (
-                  <button 
+                  <button
                     className="record-btn"
                     onClick={startRecording}
                   >
@@ -1129,7 +774,7 @@ function FormFillerContent() {
                     <span>Record</span>
                   </button>
                 ) : (
-                  <button 
+                  <button
                     className="stop-btn"
                     onClick={stopRecording}
                   >
@@ -1143,7 +788,7 @@ function FormFillerContent() {
             <div className="sessions-section">
               <div className="sessions-header">
                 <h3>Saved Sessions</h3>
-                <button 
+                <button
                   className="refresh-btn"
                   onClick={loadSessions}
                   disabled={isLoadingSessions}
@@ -1151,14 +796,12 @@ function FormFillerContent() {
                   <RefreshIcon width={16} height={16} />
                 </button>
               </div>
-              
+
               <div className="sessions-list">
                 {isLoadingSessions ? (
                   <div className="loading-sessions">Loading sessions...</div>
                 ) : sessions.length > 0 ? (
-                  sessions.map((session) => {
-                    console.log('Rendering session:', session)
-                    return (
+                  sessions.map((session) => (
                     <div key={session.id} className="session-item">
                       <div className="session-info">
                         <div className="session-name">{session.name}</div>
@@ -1168,14 +811,14 @@ function FormFillerContent() {
                         <div className="session-steps">{session.steps?.length || 0} steps</div>
                       </div>
                       <div className="session-actions">
-                        <button 
+                        <button
                           className="play-btn"
                           onClick={() => playSession(session.id)}
                           disabled={deletingSessionIds.has(session.id)}
                         >
                           Play
                         </button>
-                        <button 
+                        <button
                           className={`delete-btn ${deletingSessionIds.has(session.id) ? 'deleting' : ''}`}
                           onClick={() => deleteSession(session.id)}
                           disabled={deletingSessionIds.has(session.id)}
@@ -1189,8 +832,7 @@ function FormFillerContent() {
                         </button>
                       </div>
                     </div>
-                    )
-                  })
+                  ))
                 ) : (
                   <div className="no-sessions">No sessions found for this site</div>
                 )}
@@ -1204,17 +846,7 @@ function FormFillerContent() {
 }
 
 function IndexPopup() {
-  return (
-    <ClerkProvider
-      publishableKey={ENV.CLERK_PUBLISHABLE_KEY}
-      afterSignOutUrl={`${EXTENSION_URL}/popup.html`}
-      signInFallbackRedirectUrl={`${EXTENSION_URL}/popup.html`}
-      signUpFallbackRedirectUrl={`${EXTENSION_URL}/popup.html`}
-      syncHost={ENV.CLERK_SYNC_HOST}
-    >
-      <FormFillerContent />
-    </ClerkProvider>
-  )
+  return <FormFillerContent />
 }
 
 export default IndexPopup
