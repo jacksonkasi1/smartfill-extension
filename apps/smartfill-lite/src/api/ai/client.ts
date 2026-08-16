@@ -69,12 +69,18 @@ async function getProviderSettings(): Promise<ProviderSettings> {
 }
 
 async function callGeminiAPI(prompt: string, model: string, apiKey: string): Promise<string> {
-  const url = `${PROVIDERS.gemini.baseUrl}/${model}:generateContent?key=${apiKey}`
+  // The API key is sent as the x-goog-api-key header rather than
+  // embedded in the query string, so it does not end up in proxy
+  // logs, browser history, or referer headers.
+  const url = `${PROVIDERS.gemini.baseUrl}/${encodeURIComponent(model)}:generateContent`
   let response: Response
   try {
     response = await fetchWithTimeout(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey
+      },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
     })
   } catch (err) {

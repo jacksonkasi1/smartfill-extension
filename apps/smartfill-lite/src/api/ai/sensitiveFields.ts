@@ -125,10 +125,36 @@ export function isSensitiveField(field: FormField): boolean {
   if (!haystack) return false
 
   const lower = haystack.toLowerCase()
-  for (const p of LONG_SENSITIVE_PATTERNS) {
-    if (lower.includes(p)) return true
-  }
   const tokens = tokenize(haystack)
+  const tokenSet = new Set(tokens)
+
+  // Long patterns: if the pattern is a multi-word phrase we can
+  // safely substring-match it. Single-word long patterns must match
+  // on a token boundary, otherwise "secret" would falsely match
+  // "Secretary" / "secretaryName" / etc.
+  for (const p of LONG_SENSITIVE_PATTERNS) {
+    if (p.includes(' ')) {
+      if (lower.includes(p)) return true
+    } else {
+      if (tokenSet.has(p)) return true
+    }
+  }
+
+  // Compound match for multi-word patterns only. We flatten the
+  // haystack and the pattern by stripping separators, so
+  // "creditCardNumber" / "credit_card_number" all become
+  // "creditcardnumber" and can match the flattened "credit card"
+  // pattern. We deliberately do NOT apply this to single-word
+  // patterns — otherwise "secret" would still substring-match
+  // "secretary" via the flattened form.
+  const flat = lower.replace(/[\s_\-./\\:]+/g, '')
+  for (const p of LONG_SENSITIVE_PATTERNS) {
+    if (!p.includes(' ')) continue
+    const flatPattern = p.replace(/[\s_\-./\\:]+/g, '')
+    if (flat.includes(flatPattern)) return true
+  }
+
+  // Short patterns: token boundary only.
   for (const t of tokens) {
     if (isShortSensitiveToken(t)) return true
   }
@@ -136,13 +162,29 @@ export function isSensitiveField(field: FormField): boolean {
 }
 
 export function isConsentField(field: FormField): boolean {
+  // Consent handling is only meaningful for boolean / choice
+  // controls. A free-text "Legal Name" or "Medical Condition"
+  // field should never be treated as a consent field, even if
+  // its label contains a consent-looking word.
+  if (field.type !== 'checkbox' && field.type !== 'radio') return false
+
   const haystack =
     `${field.name || ''} ${field.label || ''} ${field.placeholder || ''}`.toLowerCase()
   if (!haystack.trim()) return false
-  return CONSENT_KEYWORDS.some(k => {
-    const tokens = tokenize(haystack)
-    return tokens.some(t => t === k || t.startsWith(k) || t.includes(k))
-  })
+  const tokens = tokenize(haystack)
+  if (tokens.length === 0) return false
+
+  // Token-aware match. We require a real token to equal or
+  // start-with a consent keyword. Using `token.includes(k)`
+  // would let "agreement" match "agree" inside unrelated words
+  // like "disagreement" / "re-agreement", etc.
+  for (const k of CONSENT_KEYWORDS) {
+    for (const t of tokens) {
+      if (t === k) return true
+      if (k.length >= 4 && t.startsWith(k)) return true
+    }
+  }
+  return false
 }
 
 /**
@@ -250,15 +292,37 @@ const SENSITIVE_FIELD_KEYS: Record<string, ReadonlyArray<string>> = {
 
 /**
  * Map a sensitive field to the keys that would identify it in user
- * context. Falls back to the field's own name / label.
+ * context. Falls back to the field's own name tokens if no
+ * canonical key matches. We do NOT use broad fallback aliases like
+ * "number" / "code" / "account" because they match too many
+ * unrelated fields.
  */
 function keysForSensitiveField(field: FormField): string[] {
   const fhaystack = `${field.name} ${field.label || ''}`.toLowerCase()
   for (const [canonical, keys] of Object.entries(SENSITIVE_FIELD_KEYS)) {
     if (keys.some(k => fhaystack.includes(k))) return [...keys]
   }
-  // Fallback: use field name tokens
   return tokenize(field.name || '')
+}
+
+/**
+ * Canonicalize a sensitive value for exact comparison.
+ *
+ * Trims whitespace. For Aadhaar / card-style values we also
+ * collapse internal spaces and hyphens so "1234 5678 9012",
+ * "1234-5678-9012", and "123456789012" all normalize to the same
+ * canonical form. We do NOT strip leading zeros or apply any
+ * lossy transformation that could make "1" match "4321".
+ */
+function normalizeSensitiveValue(value: string): string {
+  let v = String(value || '').trim()
+  if (!v) return ''
+  // For values that look like grouped numbers / card numbers,
+  // collapse spaces and hyphens.
+  if (/^[\d][\d\s-]+$/.test(v) && (v.includes(' ') || v.includes('-'))) {
+    v = v.replace(/[\s-]+/g, '')
+  }
+  return v
 }
 
 /**
@@ -360,29 +424,29 @@ export function extractExplicitContextMap(customInstructions: string | undefined
 /**
  * Is `value` allowed for `field` given the explicit context map?
  *
- * Returns true only when one of the field's expected keys appears in
- * the map and the map's recorded value(s) contain `value` (exact or
- * as a sub-token). Bare token-presence-in-context is no longer
- * sufficient.
+ * Returns true only when one of the field's expected keys appears
+ * in the map AND the map's recorded value, after canonicalization,
+ * equals the candidate value. Substring containment is not used
+ * (it was too permissive: "PIN: 1" would have accepted
+ * AI pin=4321). For grouped number formats (Aadhaar, card
+ * numbers) spaces and hyphens are normalized away.
  */
 export function isSensitiveValueAllowed(
   field: FormField,
   value: string,
   contextMap: ExplicitContextMap
 ): boolean {
-  if (!value) return false
-  const v = value.trim()
-  if (!v) return false
+  const candidate = normalizeSensitiveValue(value)
+  if (!candidate) return false
   const expectedKeys = keysForSensitiveField(field)
   if (expectedKeys.length === 0) return false
 
   for (const [mapKey, mapValues] of contextMap.entries()) {
     if (!anyKeyMatches(mapKey, expectedKeys)) continue
     for (const stored of mapValues) {
-      if (!stored) continue
-      if (stored.trim() === v) return true
-      // Allow exact-token containment in either direction
-      if (stored.trim().includes(v) || v.includes(stored.trim())) return true
+      const storedNorm = normalizeSensitiveValue(stored)
+      if (!storedNorm) continue
+      if (storedNorm === candidate) return true
     }
   }
   return false

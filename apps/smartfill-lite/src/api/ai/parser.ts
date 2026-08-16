@@ -153,13 +153,19 @@ function isTruthyValue(value: any): boolean {
 
 function normalizeValue(value: any, field: FormField): string | boolean | string[] {
   if (field.type === 'checkbox') {
-    if (Array.isArray(value)) return value.map(v => normalizeToString(v))
+    if (Array.isArray(value)) {
+      return value.map(v => normalizeToString(v))
+    }
     if (typeof value === 'boolean') return value
     if (typeof value === 'string') {
-      const v = value.toLowerCase()
+      const v = value.trim().toLowerCase()
       if (v === 'true' || v === '1' || v === 'yes' || v === 'on') return true
       if (v === 'false' || v === '0' || v === 'no' || v === 'off') return false
-      return v
+      // For option-based checkboxes / checkbox groups, preserve the
+      // original casing so "Full Time" stays "Full Time" instead of
+      // becoming "full time" (lowercased values can fail to match
+      // real option text).
+      return value.trim()
     }
     return Boolean(value)
   }

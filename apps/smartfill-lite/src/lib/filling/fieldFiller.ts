@@ -13,6 +13,12 @@ const HTMLTextAreaValueSetter = Object.getOwnPropertyDescriptor(
 const HTMLSelectValueSetter = Object.getOwnPropertyDescriptor(
   HTMLSelectElement.prototype, 'value'
 )?.set
+// React intercepts the prototype `checked` property as well; using
+// the native setter is what survives React-controlled checkbox and
+// radio inputs.
+const HTMLInputCheckedSetter = Object.getOwnPropertyDescriptor(
+  HTMLInputElement.prototype, 'checked'
+)?.set
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -218,7 +224,13 @@ export function fillRadioField(
         targetLower.includes(lowered)
       ) {
         radio.focus()
-        radio.checked = true
+        // Use the native checked setter so React-controlled forms
+        // pick up the change rather than reverting it.
+        if (HTMLInputCheckedSetter) {
+          HTMLInputCheckedSetter.call(radio, true)
+        } else {
+          radio.checked = true
+        }
         triggerEvents(radio)
         return true
       }
@@ -242,7 +254,14 @@ export function fillCheckboxField(
 
     element.focus()
     const shouldCheck = shouldCheckFromValue(value)
-    element.checked = shouldCheck
+
+    // Use the native checked setter so React-controlled forms
+    // pick up the change rather than reverting it.
+    if (HTMLInputCheckedSetter) {
+      HTMLInputCheckedSetter.call(element, shouldCheck)
+    } else {
+      element.checked = shouldCheck
+    }
     triggerEvents(element)
     return true
   } catch (error) {
@@ -286,7 +305,13 @@ export function fillCheckboxGroup(
         )
       }
       cb.focus()
-      cb.checked = matched
+      // Use the native checked setter so React-controlled forms
+      // pick up the change rather than reverting it.
+      if (HTMLInputCheckedSetter) {
+        HTMLInputCheckedSetter.call(cb, matched)
+      } else {
+        cb.checked = matched
+      }
       triggerEvents(cb)
       if (matched) filled++
     }
@@ -370,40 +395,70 @@ async function resolveCustomSelectPopup(
 ): Promise<HTMLElement | null> {
   const start = performance.now()
   const pollInterval = 25
+
+  // If the trigger has an explicit ARIA relationship, ONLY that
+  // referenced element is a valid popup. We poll it (in case the
+  // host UI renders it asynchronously) and never fall back to an
+  // unrelated global listbox.
   const explicit = trigger.getAttribute('aria-controls') || trigger.getAttribute('aria-owns')
   if (explicit) {
-    const el = document.getElementById(explicit)
-    if (el) return el
+    while (performance.now() - start < totalBudgetMs) {
+      const el = document.getElementById(explicit)
+      if (el && isElementVisible(el)) return el
+      await sleep(pollInterval)
+    }
+    return null
   }
 
+  // No explicit ARIA relationship: capture visible listboxes
+  // before opening, then find the one that became visible after
+  // we clicked the trigger. This avoids picking up an unrelated
+  // listbox that was already open elsewhere on the page.
+  const before = new Set(collectVisibleListboxes())
   while (performance.now() - start < totalBudgetMs) {
-    const popup = findVisibleListboxNear(trigger)
+    const popup = findNewlyVisibleListbox(before, trigger)
     if (popup) return popup
     await sleep(pollInterval)
   }
   return null
 }
 
-function findVisibleListboxNear(trigger: HTMLElement): HTMLElement | null {
-  // 1. A listbox already attached to the body / portal
-  const all = document.querySelectorAll('[role="listbox"]')
-  for (const el of Array.from(all)) {
-    if (isElementVisible(el as HTMLElement)) return el as HTMLElement
+function collectVisibleListboxes(): string[] {
+  const ids: string[] = []
+  for (const el of Array.from(document.querySelectorAll('[role="listbox"], [role="menu"]'))) {
+    if (isElementVisible(el as HTMLElement)) {
+      ids.push((el as HTMLElement).id || describeElement(el as HTMLElement))
+    }
   }
-  // 2. aria-controls might point to something that just appeared
-  const ac = trigger.getAttribute('aria-controls')
-  if (ac) {
-    const el = document.getElementById(ac)
-    if (el && isElementVisible(el)) return el
+  return ids
+}
+
+function findNewlyVisibleListbox(before: Set<string>, trigger: HTMLElement): HTMLElement | null {
+  const all = Array.from(document.querySelectorAll('[role="listbox"], [role="menu"]'))
+  for (const el of all) {
+    if (!isElementVisible(el as HTMLElement)) continue
+    const id = (el as HTMLElement).id || describeElement(el as HTMLElement)
+    if (before.has(id)) continue
+    return el as HTMLElement
   }
-  // 3. A portal that lives next to the trigger
+  // Fall back to the nearest popup that is plausibly tied to the
+  // trigger (same component / nearby portal).
   let parent: HTMLElement | null = trigger.parentElement
   for (let i = 0; i < 4 && parent; i++) {
     const popup = parent.querySelector('[role="listbox"], [role="menu"]')
-    if (popup && isElementVisible(popup as HTMLElement)) return popup as HTMLElement
+    if (popup && isElementVisible(popup as HTMLElement)) {
+      const id = (popup as HTMLElement).id || describeElement(popup as HTMLElement)
+      if (before.has(id)) continue
+      return popup as HTMLElement
+    }
     parent = parent.parentElement
   }
   return null
+}
+
+function describeElement(el: HTMLElement): string {
+  // Stable-enough description for "is this the same listbox?"
+  return `${el.tagName}::${el.className || ''}::${(el.textContent || '').length}`
 }
 
 function findCustomOption(popup: HTMLElement, value: string): HTMLElement | null {

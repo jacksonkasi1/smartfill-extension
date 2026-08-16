@@ -76,7 +76,10 @@ async function fillSingleField(
   // are a user choice, not a failure.
   if (field.type === 'password' && value === '') return false
 
-  const isCustomSelect = isCustomSelectElement(field.element)
+  // Only custom dropdowns get the custom retry budget. Native
+  // controls (text input, textarea, checkbox, radio, native
+  // <select>) must never incur the 120 ms retry gap.
+  const isCustomSelect = field.type === 'select' && isCustomSelectElement(field.element)
   const maxAttempts = isCustomSelect ? CUSTOM_MAX_ATTEMPTS : NATIVE_MAX_ATTEMPTS
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
