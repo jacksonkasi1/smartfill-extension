@@ -202,7 +202,12 @@ export function detectConsentDirective(
     // a weak affirm but no consent topic mentioned, so 'none'.
     const hasAcceptVerb = /\b(accept|agree|opt[\s-]?in|consent to|allow|enable|subscribe to|sign up)\b/i.test(segment)
     const hasDeclineVerb = /\b(decline|reject|refuse|opt[\s-]?out|do not|don't|don\u2019t|no thanks|unsubscribe|disable)\b/i.test(segment)
-    if (!hasAcceptVerb && !hasDeclineVerb) continue
+    // A bare "no" at the start of a sentence counts as a decline
+    // only when the consent topic is mentioned in the same
+    // segment. This catches "No marketing emails" / "No cookies"
+    // without turning every "no" in unrelated prose into a decline.
+    const hasBareNo = /^\s*no\b/i.test(segment)
+    if (!hasAcceptVerb && !hasDeclineVerb && !hasBareNo) continue
 
     const topicMentioned =
       topicKeywords.some(k => segLower.includes(k)) ||
@@ -212,6 +217,7 @@ export function detectConsentDirective(
 
     if (hasDeclineVerb) return 'decline'
     if (hasAcceptVerb) return 'accept'
+    if (hasBareNo) return 'decline'
   }
 
   return 'none'
@@ -298,6 +304,37 @@ function normalizeKey(key: string): string {
 }
 
 /**
+ * True when `key` (a phrase taken from the user context) refers to
+ * one of the expected sensitive field keys. We use token-aware
+ * matching so that "shipping" does NOT match the "pin" key just
+ * because "shipping".includes("pin") is true. Exact, prefix, or
+ * token-boundary matches only.
+ */
+function anyKeyMatches(key: string, candidates: ReadonlyArray<string>): boolean {
+  const norm = key.toLowerCase().trim()
+  if (!norm) return false
+  const normTokens = new Set(tokenize(norm))
+  for (const c of candidates) {
+    if (!c) continue
+    const cand = c.toLowerCase().trim()
+    if (!cand) continue
+    if (norm === cand) return true
+    // Token-boundary: any token of the key equals the candidate, or
+    // any token of the key starts with the candidate (handles
+    // "Pin Number" -> "pin", "Credit Card Number" -> "credit", etc.).
+    for (const t of normTokens) {
+      if (t === cand) return true
+      if (cand.length >= 3 && t.startsWith(cand)) return true
+    }
+    // Reverse: candidate tokens that start with a key token.
+    for (const t of tokenize(cand)) {
+      if (t && normTokens.has(t)) return true
+    }
+  }
+  return false
+}
+
+/**
  * Build a map of explicit key -> value assignments from the user's
  * customInstructions. Values are kept verbatim (after trimming).
  */
@@ -318,11 +355,6 @@ export function extractExplicitContextMap(customInstructions: string | undefined
     }
   }
   return map
-}
-
-function anyKeyMatches(key: string, candidates: ReadonlyArray<string>): boolean {
-  const norm = key.toLowerCase()
-  return candidates.some(c => norm === c.toLowerCase() || norm.includes(c.toLowerCase()))
 }
 
 /**

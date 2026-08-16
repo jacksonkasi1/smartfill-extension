@@ -48,37 +48,48 @@ export function formatValueForField(value: string, fieldType: FormField['type'])
  *   5 January 2024
  */
 function formatDateValue(value: string): string {
-  const dateFormats = [
-    /^(\d{4})-(\d{1,2})-(\d{1,2})$/,
-    /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,
-    /^(\d{1,2})-(\d{1,2})-(\d{4})$/
+  const dateFormats: Array<{ re: RegExp; parse: (m: RegExpMatchArray) => [number, number, number] | null }> = [
+    {
+      // YYYY-MM-DD or YYYY-M-D (unpadded)
+      re: /^(\d{4})-(\d{1,2})-(\d{1,2})$/,
+      parse: m => [parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)]
+    },
+    {
+      // M/D/YYYY
+      re: /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,
+      parse: m => [parseInt(m[3], 10), parseInt(m[1], 10), parseInt(m[2], 10)]
+    },
+    {
+      // M-D-YYYY
+      re: /^(\d{1,2})-(\d{1,2})-(\d{4})$/,
+      parse: m => [parseInt(m[3], 10), parseInt(m[1], 10), parseInt(m[2], 10)]
+    }
   ]
 
-  for (const format of dateFormats) {
-    const match = value.match(format)
-    if (match) {
-      const [, a, b, c] = match
-      let y: number, m: number, d: number
-      if (a.length === 4) {
-        y = parseInt(a, 10); m = parseInt(b, 10); d = parseInt(c, 10)
-      } else {
-        m = parseInt(a, 10); d = parseInt(b, 10); y = parseInt(c, 10)
-      }
-      if (isValidYMD(y, m, d)) {
-        return `${y}-${pad2(m)}-${pad2(d)}`
-      }
-      // Out-of-range components: fall through to the Date parser.
+  for (const { re, parse } of dateFormats) {
+    const match = value.match(re)
+    if (!match) continue
+    const parsed = parse(match)
+    if (!parsed) continue
+    const [y, mo, d] = parsed
+    if (isValidYMD(y, mo, d)) {
+      return `${y}-${pad2(mo)}-${pad2(d)}`
     }
+    // The shape matched (so this is clearly meant to be a date) but
+    // the components are out of range (e.g. 2024-02-31). Return the
+    // original value unchanged so the host can surface it instead of
+    // silently rolling over via the Date fallback below.
+    return value
   }
 
   // Last-resort Date parse. Use local components, not toISOString().
   const parsedDate = new Date(value)
   if (!isNaN(parsedDate.getTime())) {
     const y = parsedDate.getFullYear()
-    const m = parsedDate.getMonth() + 1
+    const mo = parsedDate.getMonth() + 1
     const d = parsedDate.getDate()
-    if (isValidYMD(y, m, d)) {
-      return `${y}-${pad2(m)}-${pad2(d)}`
+    if (isValidYMD(y, mo, d)) {
+      return `${y}-${pad2(mo)}-${pad2(d)}`
     }
   }
 
@@ -93,8 +104,27 @@ function isValidYMD(y: number, m: number, d: number): boolean {
   if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return false
   if (y < 1900 || y > 9999) return false
   if (m < 1 || m > 12) return false
-  if (d < 1 || d > 31) return false
+  if (d < 1) return false
+  // Validate the actual number of days in the month, including
+  // February leap-year handling. This rejects things like
+  // 2024-02-31, 2023-02-29, 2023-04-31, etc.
+  const lastDay = daysInMonth(y, m)
+  if (d > lastDay) return false
   return true
+}
+
+/**
+ * Number of days in a (year, month) pair, with correct leap-year
+ * handling for February.
+ */
+function daysInMonth(year: number, month: number): number {
+  // Standard month lengths for non-February.
+  const standard = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+  if (month === 2) {
+    const leap = (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0)
+    return leap ? 29 : 28
+  }
+  return standard[month - 1] || 30
 }
 
 /**
@@ -195,6 +225,9 @@ function formatDateTimeValue(value: string): string {
     if (isValidYMD(y, mo, d) && isValidHour(h) && isValidMinute(mi)) {
       return `${y}-${pad2(mo)}-${pad2(d)}T${pad2(h)}:${pad2(mi)}`
     }
+    // Pattern matched but out of range. Return unchanged rather than
+    // falling through to new Date() which would silently roll over
+    // (e.g. 2024-02-31T09:30 -> 2024-03-02T09:30).
     return value
   }
 

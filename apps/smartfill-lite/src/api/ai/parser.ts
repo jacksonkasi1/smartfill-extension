@@ -5,10 +5,8 @@ import type { AIFormData, FormField } from '@/types/extension'
 import {
   isSensitiveField,
   isConsentField,
-  extractExplicitContextTokens,
   extractExplicitContextMap,
   isSensitiveValueAllowed,
-  isValueExplicitInContext,
   detectConsentDirective
 } from './sensitiveFields'
 
@@ -48,8 +46,6 @@ export function parseAIResponse(
   // context. The parser uses this to decide whether a sensitive
   // value is associated with the right field.
   const contextMap = extractExplicitContextMap(customInstructions)
-  // Tokens are still useful for non-sensitive field matching.
-  const contextTokens = extractExplicitContextTokens(customInstructions)
   const cleaned: AIFormData = {}
   const missing: string[] = []
 
@@ -85,14 +81,15 @@ export function parseAIResponse(
         continue
       }
       const truthy = isTruthyValue(raw)
-      // Field-aware consent: pass the field in so we can check the
-      // consent topic against the user context.
+      // Consent is gated ONLY by the field-aware directive. We do
+      // NOT use `isValueExplicitInContext` as a fallback because
+      // unrelated context ("true", "yes", the literal string the AI
+      // echoed) could otherwise let a consent field slip through.
       const directive = detectConsentDirective(customInstructions, field)
       const affirmativeContext =
         (directive === 'accept' && truthy) ||
         (directive === 'decline' && !truthy)
-      const affirmativeValue = truthy && isValueExplicitInContext(asString, contextTokens)
-      if (!affirmativeContext && !affirmativeValue) {
+      if (!affirmativeContext) {
         cleaned[field.name] = field.type === 'checkbox' ? false : ''
         continue
       }
