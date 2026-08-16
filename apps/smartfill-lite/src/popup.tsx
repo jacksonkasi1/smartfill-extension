@@ -58,6 +58,11 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
   const [keyStatus, setKeyStatus] = useState<{ message: string, type: 'success' | 'error' | null }>({ message: '', type: null })
   const [isLoading, setIsLoading] = useState(false)
   const [showStatusBar, setShowStatusBar] = useState(false)
+  // Safe Filling Mode is the user-controlled switch that activates
+  // the existing sensitive / consent protection in the parser. It
+  // defaults to OFF, both in this component and on disk — never
+  // default this to true.
+  const [safeFillingMode, setSafeFillingMode] = useState(false)
 
   useEffect(() => {
     if (isOpen) loadSettings()
@@ -69,7 +74,8 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
         'llmProvider',
         'llmModel',
         'llmApiKeys',
-        'showStatusBar'
+        'showStatusBar',
+        'safeFillingMode'
       ])
 
       const provider: LLMProvider = (result.llmProvider as LLMProvider) || DEFAULT_PROVIDER
@@ -94,6 +100,9 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
       })
 
       if (result.showStatusBar !== undefined) setShowStatusBar(result.showStatusBar)
+      // Default OFF. Existing users with no stored value must NOT
+      // accidentally opt into the protection layer.
+      setSafeFillingMode(result.safeFillingMode === true)
     } catch (error) {
       console.error('Failed to load settings:', error)
     }
@@ -341,6 +350,42 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
                 />
                 <span>Show status bar</span>
               </label>
+            </div>
+          </div>
+
+          {/* Safety Settings — optional user-controlled protection.
+              The existing sensitive / consent logic stays in the
+              codebase, but it only activates when Safe Filling Mode
+              is on. Default is OFF. */}
+          <div className="setting-group">
+            <h3>Safety</h3>
+            <p className="setting-description">
+              Optional protection for sensitive and consent fields.
+            </p>
+
+            <div className="setting-row">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={safeFillingMode}
+                  onChange={(e) => {
+                    const checked = e.target.checked
+                    setSafeFillingMode(checked)
+                    // Persist the actual event value, not the
+                    // (still stale) React state, to avoid a race
+                    // where storage.sync.set writes the previous
+                    // value.
+                    chrome.storage.sync.set({ safeFillingMode: checked }).catch((err) => {
+                      console.error('Save safe filling mode error:', err)
+                    })
+                  }}
+                />
+                <span>Safe Filling Mode</span>
+              </label>
+              <p className="setting-subdescription">
+                Protect sensitive and consent fields.
+                When disabled, SmartFill attempts to fill all detected fields.
+              </p>
             </div>
           </div>
 

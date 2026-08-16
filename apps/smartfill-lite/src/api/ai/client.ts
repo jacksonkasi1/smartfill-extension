@@ -171,13 +171,35 @@ async function callOpenRouterAPI(prompt: string, model: string, apiKey: string):
 }
 
 /**
+ * Options forwarded through the fill pipeline. We pass this as a
+ * single argument instead of introducing globals so the same
+ * function can be exercised under both modes by tests and by the
+ * content script.
+ */
+export interface GenerateFormDataOptions {
+  /**
+   * Safe Filling Mode. When true, the prompt tells the model to
+   * (a) only use sensitive values that came from Custom
+   * Instructions, and (b) default consent fields to false. When
+   * false (default), every detected field is filled.
+   *
+   * The parser also gates its sensitive / consent protection
+   * branches on this flag, so the same `safeFillingMode` value
+   * flows from the popup through `content.ts` and into both
+   * `buildPrompt` and `parseAIResponse`.
+   */
+  safeFillingMode?: boolean
+}
+
+/**
  * Generate form data using the configured LLM provider. Returns both
  * the parsed fields and per-step timings so the caller can show a
  * useful performance log.
  */
 export async function generateFormData(
   fields: FormField[],
-  customPrompt?: string
+  customPrompt?: string,
+  options: GenerateFormDataOptions = {}
 ): Promise<AIResult> {
   const { provider, model, apiKey } = await getProviderSettings()
 
@@ -189,9 +211,12 @@ export async function generateFormData(
     modelType
   }
 
+  // Default OFF — never default this to true.
+  const safeFillingMode = options.safeFillingMode === true
+
   // ---- Prompt build ----
   const t0 = performance.now()
-  const prompt = buildPrompt(fields, customPrompt, modelMetadata)
+  const prompt = buildPrompt(fields, customPrompt, modelMetadata, { safeFillingMode })
   const promptMs = performance.now() - t0
 
   // ---- Provider call ----
@@ -207,7 +232,7 @@ export async function generateFormData(
 
   // ---- Parse ----
   const t2 = performance.now()
-  const data = parseAIResponse(generatedText, fields, customPrompt)
+  const data = parseAIResponse(generatedText, fields, customPrompt, { safeFillingMode })
   const parseMs = performance.now() - t2
 
   return {

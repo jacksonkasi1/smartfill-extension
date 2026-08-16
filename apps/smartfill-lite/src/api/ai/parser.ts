@@ -15,22 +15,31 @@ import {
  *
  * Behaviour:
  *   - Tolerates surrounding prose and markdown code fences.
- *   - For sensitive fields, only allows a value when the user
- *     context contains an explicit `key: value` pair that
- *     associates the value with that specific field. A bare
- *     token-presence-in-context check is no longer sufficient.
- *   - For consent fields (terms / privacy / newsletter / etc.),
- *     default to false / unchecked. The user context must
- *     contain a consent directive tied to the field's topic
- *     (e.g. "accept the terms" for a Terms checkbox) to flip it
- *     to true.
+ *   - When `safeFillingMode` is true (the user opted in to the
+ *     protection layer):
+ *       * Sensitive fields (password, passport, Aadhaar, PAN, SSN,
+ *         PIN, OTP, CVV, bank account, credit card, tax ID, ...)
+ *         are only allowed a value when the user context contains
+ *         an explicit `key: value` pair that associates the value
+ *         with that specific field. Everything else is left blank.
+ *       * Consent / opt-in fields (terms, privacy, newsletter,
+ *         marketing, cookies, ...) default to false / unchecked.
+ *         The user context must contain a consent directive tied
+ *         to the field's topic (e.g. "accept the terms" for a
+ *         Terms checkbox) to flip it to true.
+ *   - When `safeFillingMode` is false (default, "SmartFill Lite"
+ *     mode), the AI is allowed to generate appropriate values for
+ *     every detected field. Nothing is blanked purely because it is
+ *     sensitive or consent-shaped. Password and confirm-password
+ *     fields are filled with whatever the AI produced.
  *   - Empty string for sensitive fields is preserved as the
  *     user's intent.
  */
 export function parseAIResponse(
   response: string,
   fields: FormField[],
-  customInstructions?: string
+  customInstructions?: string,
+  options: { safeFillingMode?: boolean } = {}
 ): AIFormData {
   const jsonText = extractFirstJsonObject(response)
   if (!jsonText) throw new Error('No JSON found in AI response')
@@ -42,10 +51,17 @@ export function parseAIResponse(
     throw new Error(`Failed to parse AI response JSON: ${(err as Error).message}`)
   }
 
+  // Default OFF. Existing users with no setting must receive
+  // unrestricted filling.
+  const safeFillingMode = options.safeFillingMode === true
+
   // Build a structured map of explicit assignments from the user
-  // context. The parser uses this to decide whether a sensitive
-  // value is associated with the right field.
-  const contextMap = extractExplicitContextMap(customInstructions)
+  // context. The parser uses this (only when safeFillingMode is on)
+  // to decide whether a sensitive value is associated with the
+  // right field.
+  const contextMap = safeFillingMode
+    ? extractExplicitContextMap(customInstructions)
+    : new Map<string, string[]>()
   const cleaned: AIFormData = {}
   const missing: string[] = []
 
@@ -56,13 +72,16 @@ export function parseAIResponse(
 
     if (raw === undefined || raw === null) {
       missing.push(field.name)
-      cleaned[field.name] = fallbackForField(field, sensitive, consent)
+      cleaned[field.name] = fallbackForField(field, sensitive, consent, safeFillingMode)
       continue
     }
 
     const asString = normalizeToString(raw)
 
-    if (sensitive) {
+    // ----------------------------------------------------------------
+    // Safe Filling Mode ON — apply sensitive / consent protection.
+    // ----------------------------------------------------------------
+    if (safeFillingMode && sensitive) {
       // Sensitive value must be associated with this specific field
       // by an explicit key/value pair in the user context.
       if (asString === '') {
@@ -75,7 +94,7 @@ export function parseAIResponse(
       continue
     }
 
-    if (consent) {
+    if (safeFillingMode && consent) {
       if (asString === '') {
         cleaned[field.name] = ''
         continue
@@ -97,6 +116,13 @@ export function parseAIResponse(
       continue
     }
 
+    // ----------------------------------------------------------------
+    // Safe Filling Mode OFF (default) — normalise the AI value for
+    // every field, sensitive or not, consent or not. We still call
+    // the helper so consent / sensitive fields benefit from the
+    // same checkbox / select / radio normalization as normal
+    // fields. No field is blanked because of its topic.
+    // ----------------------------------------------------------------
     if (asString === '') {
       cleaned[field.name] = ''
       continue
@@ -182,12 +208,20 @@ function normalizeValue(value: any, field: FormField): string | boolean | string
 function fallbackForField(
   field: FormField,
   sensitive: boolean,
-  consent: boolean
+  consent: boolean,
+  safeFillingMode: boolean
 ): string | boolean | string[] {
-  if (sensitive) return ''
-  if (consent) {
-    if (field.type === 'checkbox') return false
-    return ''
+  // The sensitive / consent blanks are the *protection* behavior.
+  // They only kick in when the user has explicitly enabled Safe
+  // Filling Mode. When the mode is off, fall through to the normal
+  // generic fallback so sensitive / consent fields still get a
+  // value when the AI happens to omit one.
+  if (safeFillingMode) {
+    if (sensitive) return ''
+    if (consent) {
+      if (field.type === 'checkbox') return false
+      return ''
+    }
   }
   if (field.type === 'checkbox') {
     if (field.options && field.options.length > 1) return [field.options[0]]

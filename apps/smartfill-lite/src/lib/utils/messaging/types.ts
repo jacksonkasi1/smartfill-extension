@@ -87,6 +87,27 @@ export interface FillOptions {
   validateFields?: boolean
   delayBetweenFields?: number
   useAI?: boolean
+  /**
+   * Safe Filling Mode.
+   *
+   * When true, the existing protection logic kicks in:
+   *   - sensitive fields (password, passport, Aadhaar, PAN, SSN,
+   *     PIN, OTP, CVV, bank account, credit card, tax ID, etc.)
+   *     are only filled from values the user explicitly put in
+   *     Custom Instructions; everything else is left blank.
+   *   - consent / opt-in fields (terms, privacy, newsletter,
+   *     marketing, cookies, ...) default to false unless the user
+   *     context contains a directive for that specific topic.
+   *
+   * When false (default), SmartFill attempts to fill every
+   * detected field, including sensitive and consent fields. The AI
+   * is told to generate appropriate values when no user context is
+   * available, and to make password and confirm-password fields
+   * match.
+   *
+   * This is a USER-OPTIONAL protection. Default is false.
+   */
+  safeFillingMode?: boolean
 }
 
 // Message Action Constants

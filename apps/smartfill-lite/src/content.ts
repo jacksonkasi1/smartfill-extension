@@ -103,6 +103,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 async function fillForms(customPrompt?: string): Promise<FillResult> {
   const totalStart = performance.now()
 
+  // 0) Read the Safe Filling Mode setting from chrome.storage.sync.
+  // Default OFF — never default this to true. Existing users with
+  // no stored setting must receive unrestricted filling.
+  let safeFillingMode = false
+  try {
+    const stored = await chrome.storage.sync.get(['safeFillingMode'])
+    safeFillingMode = stored.safeFillingMode === true
+  } catch (err) {
+    console.error('[SmartFill] Failed to read safeFillingMode setting:', err)
+  }
+
   // 1) Detect
   const detectStart = performance.now()
   const detectResult = await detectAllForms()
@@ -117,7 +128,7 @@ async function fillForms(customPrompt?: string): Promise<FillResult> {
   }
 
   // 2) AI prepare + request + parse
-  const aiResult = await generateFormData(allFields, customPrompt)
+  const aiResult = await generateFormData(allFields, customPrompt, { safeFillingMode })
   const { data: aiData, timings: aiTimings } = aiResult
 
   // 3) Fill
@@ -133,6 +144,7 @@ async function fillForms(customPrompt?: string): Promise<FillResult> {
       '[SmartFill Performance]',
       '',
       `Fields detected: ${allFields.length}`,
+      `Safe Filling Mode: ${safeFillingMode ? 'ON' : 'OFF'}`,
       `Detection: ${detectMs.toFixed(0)}ms`,
       `Prompt build: ${aiTimings.promptMs.toFixed(0)}ms`,
       `AI API: ${aiTimings.apiMs.toFixed(0)}ms`,
