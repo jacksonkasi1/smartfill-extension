@@ -108,10 +108,14 @@ No user context was provided. Generate reasonable values based on the field labe
   if (sensitiveFields.length > 0) {
     basePrompt += `
 
-SENSITIVE FIELDS (do NOT generate values for these — leave them empty in the JSON output):
+SENSITIVE FIELDS:
 ${sensitiveList}
 
-The user did not provide a value for these fields in the context above. You must NOT hallucinate fake passport numbers, Aadhaar numbers, credit card numbers, bank account numbers, tax IDs, or passwords. If the user did not supply them, omit the field or return an empty string.`
+Rules for sensitive fields:
+- Use a value ONLY when the user context above explicitly contains it.
+- If the user context does NOT provide a value, return an empty string for that field.
+- Never invent fake passport numbers, Aadhaar numbers, credit card numbers, bank account numbers, tax IDs, or passwords.
+- The host will independently cross-check any value you return against the user's context; values that did not come from the context will be discarded.`
   }
 
   basePrompt += `

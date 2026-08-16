@@ -2,22 +2,14 @@
 import { MessageListener, MESSAGE_ACTIONS } from "@/lib/utils/messaging"
 
 // Type-safe message listener for popup operations.
-// In SmartFill Lite there is no auth and no RAG — the background script
-// only exists to support a few utility message types that the popup or
-// the content script might send.
+// SmartFill Lite has no auth and no RAG — the background script is a
+// minimal message router. The popup simply uses the action button
+// default open, no extra state needs to be persisted in storage.
+
 chrome.runtime.onMessage.addListener(
   MessageListener.createAsync<any, any>(async (message, _sender) => {
     if (message.action === MESSAGE_ACTIONS.POPUP.OPEN) {
       try {
-        if (message.data) {
-          await chrome.storage.local.set({
-            smartfill_auth_sync: {
-              ...message.data,
-              timestamp: Date.now()
-            }
-          })
-        }
-
         await chrome.action.openPopup()
         return { success: true }
       } catch (error) {

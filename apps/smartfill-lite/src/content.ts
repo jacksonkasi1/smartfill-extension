@@ -4,7 +4,7 @@ import type { DetectResult, FillResult } from './types/extension'
 import type { RecordingSession, RecordingStep } from './types/recording'
 
 // ** import utils
-import { MessageListener, MessagingClient, WebsiteEvents, MessagingTypes, MESSAGE_ACTIONS } from "@/lib/utils/messaging"
+import { MessageListener, MessagingClient, WebsiteEvents, MESSAGE_ACTIONS } from "@/lib/utils/messaging"
 
 // ** import lib
 import { detectAllForms, fillForm } from './lib'
@@ -24,18 +24,12 @@ let isRecording = false
 let recordingStartTime = 0
 let eventListeners: Array<{ element: Element, event: string, handler: EventListener }> = []
 
-// Initialize recording state from storage on load
 async function initializeRecordingState() {
   try {
     const result = await chrome.storage.local.get(['recordingState'])
     if (result.recordingState?.isRecording) {
-      // Recording was in progress but content script reloaded.
-      // Reset to stopped state since we can't recover the session.
       await chrome.storage.local.set({
-        recordingState: {
-          isRecording: false,
-          status: 'Ready to record'
-        }
+        recordingState: { isRecording: false, status: 'Ready to record' }
       })
     }
   } catch (error) {
@@ -45,11 +39,9 @@ async function initializeRecordingState() {
 
 initializeRecordingState()
 
-// Type-safe website event listeners
 WebsiteEvents.onExtensionOpen((data) => {
   MessagingClient.openPopup({ data }).catch(console.error)
 })
-
 WebsiteEvents.onWebsiteMessage((eventData) => {
   MessagingClient.openPopup({ data: eventData.data }).catch(console.error)
 })
@@ -65,8 +57,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           return { success: true, status: "ready" }
 
         case MESSAGE_ACTIONS.FORMS.FILL: {
-          // The fill flow is: detect → optional context → AI → fill.
-          // The only network request we make is the single AI provider call.
           const result = await fillForms(message.prompt)
           return {
             success: result.success,
@@ -77,23 +67,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         }
 
         case MESSAGE_ACTIONS.RECORDING.START:
-          console.log("Starting recording...")
           return await startRecording()
-
         case MESSAGE_ACTIONS.RECORDING.STOP:
-          console.log("Stopping recording...")
           return await stopRecording()
-
         case MESSAGE_ACTIONS.RECORDING.PLAY:
-          console.log("Playing session:", message.sessionId)
           return await playSession(message.sessionId)
 
         default:
-          return {
-            success: false,
-            status: "error",
-            error: `Unknown action: ${message.action}`
-          }
+          return { success: false, status: "error", error: `Unknown action: ${message.action}` }
       }
     } catch (error) {
       console.error("Message handling error:", error)
@@ -113,26 +94,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         error: error instanceof Error ? error.message : 'Unknown error'
       })
     })
-
-  // Keep the channel open for the async response
   return true
 })
 
-async function detectForms(): Promise<DetectResult> {
-  try {
-    return await detectAllForms()
-  } catch (error) {
-    console.error('Form detection error:', error)
-    return {
-      success: false,
-      formCount: 0,
-      forms: []
-    }
-  }
-}
-
 // ---------------------------------------------------------------------------
-// Core fill pipeline: Detect → Context → AI → Fill
+// Core fill pipeline: Detect -> Context -> AI -> Fill
 // ---------------------------------------------------------------------------
 async function fillForms(customPrompt?: string): Promise<FillResult> {
   const totalStart = performance.now()
@@ -145,102 +111,81 @@ async function fillForms(customPrompt?: string): Promise<FillResult> {
   if (!detectResult.success || detectResult.forms.length === 0) {
     return { success: false, filled: 0, errors: ['No forms detected on this page'] }
   }
-
-  const allFields = detectResult.forms.flatMap(
-    (form: import('@/types/extension').DetectedForm) => form.fields
-  )
-
+  const allFields = detectResult.forms.flatMap(f => f.fields)
   if (allFields.length === 0) {
     return { success: false, filled: 0, errors: ['No fillable fields found'] }
   }
 
-  // 2) AI prepare + request
-  const aiStart = performance.now()
-  let aiData
-  try {
-    aiData = await generateFormData(allFields, customPrompt)
-  } catch (error) {
-    console.error('AI generation error:', error)
-    const errorMessage = error instanceof Error ? error.message : 'AI processing failed'
-    return { success: false, filled: 0, errors: [errorMessage] }
-  }
-  const aiMs = performance.now() - aiStart
+  // 2) AI prepare + request + parse
+  const aiResult = await generateFormData(allFields, customPrompt)
+  const { data: aiData, timings: aiTimings } = aiResult
 
   // 3) Fill
   const fillStart = performance.now()
   const fillResult = await fillForm(allFields, aiData)
   const fillMs = performance.now() - fillStart
 
-  // 4) Performance instrumentation (dev only — no network, no UI block)
+  // 4) Performance instrumentation (dev only)
   const totalMs = performance.now() - totalStart
+  const failed = allFields.length - fillResult.filled
   if (process.env.NODE_ENV !== 'production') {
-    console.log(
-      [
-        '[SmartFill]',
-        '',
-        `Fields: ${allFields.length}`,
-        `Detection: ${detectMs.toFixed(0)}ms`,
-        `AI request: ${aiMs.toFixed(0)}ms`,
-        `Fill: ${fillMs.toFixed(0)}ms`,
-        `Total: ${totalMs.toFixed(0)}ms`
-      ].join('\n')
-    )
+    const lines = [
+      '[SmartFill Performance]',
+      '',
+      `Fields detected: ${allFields.length}`,
+      `Detection: ${detectMs.toFixed(0)}ms`,
+      `Prompt build: ${aiTimings.promptMs.toFixed(0)}ms`,
+      `AI API: ${aiTimings.apiMs.toFixed(0)}ms`,
+      `Parsing: ${aiTimings.parseMs.toFixed(0)}ms`,
+      `Fill: ${fillMs.toFixed(0)}ms`,
+      `Total: ${totalMs.toFixed(0)}ms`,
+      '',
+      `Filled: ${fillResult.filled}`,
+      `Failed: ${failed}`
+    ]
+    console.log(lines.join('\n'))
   }
 
   return fillResult
 }
 
 // ---------------------------------------------------------------------------
-// Recording helpers (unchanged structurally; the recording feature is
-// independent of AI fill and remains enabled for parity with the prior build)
+// Recording helpers (unchanged structurally)
 // ---------------------------------------------------------------------------
 function generateSelector(element: Element): string {
   if (element.id) return `#${element.id}`
-
   if (element.className) {
     const classes = element.className.split(' ').filter(c => c.trim()).join('.')
     if (classes) return `.${classes}`
   }
-
   const tagName = element.tagName.toLowerCase()
   const parent = element.parentElement
   if (parent) {
-    const siblings = Array.from(parent.children).filter(child => child.tagName === element.tagName)
+    const siblings = Array.from(parent.children).filter(c => c.tagName === element.tagName)
     if (siblings.length > 1) {
       const index = siblings.indexOf(element) + 1
       return `${tagName}:nth-child(${index})`
     }
   }
-
   return tagName
 }
 
 async function startRecording(): Promise<{ success: boolean, error?: string }> {
   try {
     if (isRecording) return { success: false, error: "Already recording" }
-
     const domain = window.location.hostname
     const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     const sessionName = `Session ${new Date().toLocaleTimeString()}`
-
     currentRecording = {
-      id: sessionId,
-      name: sessionName,
-      domain,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      steps: []
+      id: sessionId, name: sessionName, domain,
+      createdAt: new Date(), updatedAt: new Date(), steps: []
     }
-
     isRecording = true
     recordingStartTime = Date.now()
-
     await chrome.storage.local.set({
       recordingState: { isRecording: true, status: 'Recording in progress...' }
     })
-
     setupRecordingListeners()
-
     return { success: true }
   } catch (error) {
     console.error('Error starting recording:', error)
@@ -250,24 +195,17 @@ async function startRecording(): Promise<{ success: boolean, error?: string }> {
 
 async function stopRecording(): Promise<{ success: boolean, error?: string }> {
   try {
-    if (!isRecording || !currentRecording) {
-      return { success: false, error: "Not recording" }
-    }
-
+    if (!isRecording || !currentRecording) return { success: false, error: "Not recording" }
     isRecording = false
     cleanupRecordingListeners()
-
     const sessions = await getStoredSessions()
     sessions.push(currentRecording)
     await chrome.storage.local.set({ recordingSessions: sessions })
-
     await chrome.storage.local.set({
       recordingState: { isRecording: false, status: 'Ready to record' }
     })
-
     currentRecording = null
     recordingStartTime = 0
-
     return { success: true }
   } catch (error) {
     console.error('Error stopping recording:', error)
@@ -288,8 +226,7 @@ function setupDocumentListeners() {
     if (scrollTimeout) clearTimeout(scrollTimeout)
     scrollTimeout = window.setTimeout(() => {
       recordInteraction('scroll', document.documentElement, JSON.stringify({
-        x: window.scrollX,
-        y: window.scrollY,
+        x: window.scrollX, y: window.scrollY,
         target: event.target === document ? 'document' : 'element'
       }))
     }, 100)
@@ -299,16 +236,13 @@ function setupDocumentListeners() {
 
   const keydownHandler = (event: Event) => {
     if (!isRecording) return
-    const keyboardEvent = event as KeyboardEvent
-    const target = keyboardEvent.target as Element
+    const kb = event as KeyboardEvent
+    const target = kb.target as Element
     if (!target.matches('input, textarea, [contenteditable="true"]')) return
     recordInteraction('keydown', target, JSON.stringify({
-      key: keyboardEvent.key,
-      code: keyboardEvent.code,
-      ctrlKey: keyboardEvent.ctrlKey,
-      altKey: keyboardEvent.altKey,
-      shiftKey: keyboardEvent.shiftKey,
-      metaKey: keyboardEvent.metaKey
+      key: kb.key, code: kb.code,
+      ctrlKey: kb.ctrlKey, altKey: kb.altKey,
+      shiftKey: kb.shiftKey, metaKey: kb.metaKey
     }))
   }
   document.addEventListener('keydown', keydownHandler, true)
@@ -316,8 +250,8 @@ function setupDocumentListeners() {
 
   const focusHandler = (event: Event) => {
     if (!isRecording) return
-    const focusEvent = event as FocusEvent
-    const target = focusEvent.target as Element
+    const fe = event as FocusEvent
+    const target = fe.target as Element
     if (target.matches('input, textarea, select, [contenteditable="true"]')) {
       recordInteraction('focus', target, '')
     }
@@ -327,12 +261,9 @@ function setupDocumentListeners() {
 
   const mousedownHandler = (event: Event) => {
     if (!isRecording) return
-    const mouseEvent = event as MouseEvent
-    const target = mouseEvent.target as Element
-    recordInteraction('mousedown', target, JSON.stringify({
-      x: mouseEvent.clientX,
-      y: mouseEvent.clientY,
-      button: mouseEvent.button
+    const me = event as MouseEvent
+    recordInteraction('mousedown', me.target as Element, JSON.stringify({
+      x: me.clientX, y: me.clientY, button: me.button
     }))
   }
   document.addEventListener('mousedown', mousedownHandler, true)
@@ -340,20 +271,17 @@ function setupDocumentListeners() {
 }
 
 function setupElementListeners() {
-  const elements = document.querySelectorAll('input, textarea, select, button, [role="button"], [onclick], a, [tabindex]')
-  elements.forEach(setupSingleElementListeners)
+  document.querySelectorAll('input, textarea, select, button, [role="button"], [onclick], a, [tabindex]')
+    .forEach(setupSingleElementListeners)
 }
 
 function setupSingleElementListeners(element: Element) {
   const clickHandler = (event: Event) => {
     if (!isRecording) return
-    const mouseEvent = event as MouseEvent
+    const me = event as MouseEvent
     recordInteraction('click', element, JSON.stringify({
-      x: mouseEvent.clientX,
-      y: mouseEvent.clientY,
-      button: mouseEvent.button,
-      ctrlKey: mouseEvent.ctrlKey,
-      shiftKey: mouseEvent.shiftKey
+      x: me.clientX, y: me.clientY, button: me.button,
+      ctrlKey: me.ctrlKey, shiftKey: me.shiftKey
     }))
   }
   element.addEventListener('click', clickHandler)
@@ -385,10 +313,7 @@ function setupSingleElementListeners(element: Element) {
   }
 
   if (element.matches('form')) {
-    const submitHandler = (event: Event) => {
-      if (!isRecording) return
-      recordInteraction('submit', element, '')
-    }
+    const submitHandler = () => { if (isRecording) recordInteraction('submit', element, '') }
     element.addEventListener('submit', submitHandler)
     eventListeners.push({ element, event: 'submit', handler: submitHandler })
   }
@@ -397,7 +322,6 @@ function setupSingleElementListeners(element: Element) {
 function setupMutationObserver() {
   const observer = new MutationObserver((mutations) => {
     if (!isRecording) return
-
     mutations.forEach((mutation) => {
       mutation.addedNodes.forEach((node) => {
         if (node.nodeType === Node.ELEMENT_NODE) {
@@ -405,14 +329,13 @@ function setupMutationObserver() {
           if (element.matches('.modal, .popup, .dialog, [role="dialog"], .overlay')) {
             recordInteraction('modal_open', element, '')
           }
-          const newElements = element.querySelectorAll('input, textarea, select, button, [role="button"], [onclick], a, [tabindex]')
-          newElements.forEach(setupSingleElementListeners)
+          element.querySelectorAll('input, textarea, select, button, [role="button"], [onclick], a, [tabindex]')
+            .forEach(setupSingleElementListeners)
           if (element.matches('input, textarea, select, button, [role="button"], [onclick], a, [tabindex]')) {
             setupSingleElementListeners(element)
           }
         }
       })
-
       mutation.removedNodes.forEach((node) => {
         if (node.nodeType === Node.ELEMENT_NODE) {
           const element = node as Element
@@ -421,7 +344,6 @@ function setupMutationObserver() {
           }
         }
       })
-
       if (mutation.type === 'attributes') {
         const element = mutation.target as Element
         if (mutation.attributeName === 'class' || mutation.attributeName === 'style') {
@@ -433,14 +355,10 @@ function setupMutationObserver() {
       }
     })
   })
-
   observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-    attributes: true,
+    childList: true, subtree: true, attributes: true,
     attributeFilter: ['class', 'style', 'hidden']
   })
-
   ;(window as any).__recordingObserver = observer
 }
 
@@ -450,10 +368,8 @@ function recordInteraction(
   value: string
 ) {
   if (!isRecording || !currentRecording) return
-
   const selector = generateSelector(element)
   const timestamp = Date.now() - recordingStartTime
-
   const step: RecordingStep = {
     id: `step_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     type: normalizeStepType(type),
@@ -462,32 +378,20 @@ function recordInteraction(
     timestamp,
     data: value ? (isJsonString(value) ? JSON.parse(value) : undefined) : undefined
   }
-
   currentRecording.steps.push(step)
   currentRecording.updatedAt = new Date()
 }
 
 function normalizeStepType(type: string): 'click' | 'input' | 'select' | 'keydown' | 'focus' | 'mousedown' | 'scroll' | 'modal' | 'submit' {
   switch (type) {
-    case 'modal_open':
-    case 'modal_close':
-    case 'modal_show':
-    case 'modal_hide':
-      return 'modal'
-    case 'change':
-      return 'select'
-    default:
-      return type as 'click' | 'input' | 'select' | 'keydown' | 'focus' | 'mousedown' | 'scroll' | 'submit'
+    case 'modal_open': case 'modal_close': case 'modal_show': case 'modal_hide': return 'modal'
+    case 'change': return 'select'
+    default: return type as any
   }
 }
 
 function isJsonString(str: string): boolean {
-  try {
-    JSON.parse(str)
-    return true
-  } catch (e) {
-    return false
-  }
+  try { JSON.parse(str); return true } catch { return false }
 }
 
 function cleanupRecordingListeners() {
@@ -495,7 +399,6 @@ function cleanupRecordingListeners() {
     element.removeEventListener(event, handler)
   })
   eventListeners = []
-
   const observer = (window as any).__recordingObserver
   if (observer) {
     observer.disconnect()
@@ -507,8 +410,7 @@ async function getStoredSessions(): Promise<RecordingSession[]> {
   try {
     const result = await chrome.storage.local.get(['recordingSessions'])
     return result.recordingSessions || []
-  } catch (error) {
-    console.error('Error loading sessions:', error)
+  } catch {
     return []
   }
 }
@@ -518,18 +420,14 @@ async function playSession(sessionId: string): Promise<{ success: boolean, error
     const sessions = await getStoredSessions()
     const session = sessions.find(s => s.id === sessionId)
     if (!session) return { success: false, error: 'Session not found' }
-
-    const sortedSteps = [...session.steps].sort((a, b) => a.timestamp - b.timestamp)
-    let lastTimestamp = 0
-    for (const step of sortedSteps) {
-      const delayMs = Math.max(0, step.timestamp - lastTimestamp)
-      if (delayMs > 0) {
-        await new Promise(resolve => setTimeout(resolve, Math.min(delayMs, 2000)))
-      }
+    const sorted = [...session.steps].sort((a, b) => a.timestamp - b.timestamp)
+    let last = 0
+    for (const step of sorted) {
+      const gap = Math.max(0, step.timestamp - last)
+      if (gap > 0) await new Promise(r => setTimeout(r, Math.min(gap, 2000)))
       await playStep(step)
-      lastTimestamp = step.timestamp
+      last = step.timestamp
     }
-
     return { success: true }
   } catch (error) {
     console.error('Error playing session:', error)
@@ -540,117 +438,86 @@ async function playSession(sessionId: string): Promise<{ success: boolean, error
 async function playStep(step: RecordingStep): Promise<void> {
   try {
     const element = document.querySelector(step.selector)
-    if (!element) {
-      console.warn(`Element not found for selector: ${step.selector}`)
-      return
-    }
-
+    if (!element) return
     switch (step.type) {
       case 'click':
-        if (step.data && typeof step.data === 'object' && 'x' in step.data && 'y' in step.data) {
-          const clickEvent = new MouseEvent('click', {
-            bubbles: true,
-            cancelable: true,
-            clientX: step.data.x as number,
-            clientY: step.data.y as number,
+        if (step.data && 'x' in step.data && 'y' in step.data) {
+          element.dispatchEvent(new MouseEvent('click', {
+            bubbles: true, cancelable: true,
+            clientX: step.data.x as number, clientY: step.data.y as number,
             button: (step.data.button as number) || 0
-          })
-          element.dispatchEvent(clickEvent)
+          }))
         } else {
-          ;(element as HTMLElement).click()
+          (element as HTMLElement).click()
         }
         break
-
       case 'input':
         if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element.matches('[contenteditable="true"]')) {
           if (element instanceof HTMLElement) element.focus()
-          if (step.data && typeof step.data === 'object' && 'value' in step.data) {
-            const inputData = step.data as any
+          if (step.data && 'value' in step.data) {
+            const d = step.data as any
             if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
-              element.value = inputData.value || ''
-              if (typeof inputData.selectionStart === 'number') {
-                element.setSelectionRange(inputData.selectionStart, inputData.selectionEnd || inputData.selectionStart)
+              element.value = d.value || ''
+              if (typeof d.selectionStart === 'number') {
+                element.setSelectionRange(d.selectionStart, d.selectionEnd || d.selectionStart)
               }
             } else {
-              ;(element as any).textContent = inputData.value || ''
+              (element as any).textContent = d.value || ''
             }
           } else {
             if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
               element.value = step.value || ''
             } else {
-              ;(element as any).textContent = step.value || ''
+              (element as any).textContent = step.value || ''
             }
           }
           element.dispatchEvent(new Event('input', { bubbles: true }))
           element.dispatchEvent(new Event('change', { bubbles: true }))
         }
         break
-
       case 'select':
         if (element instanceof HTMLSelectElement) {
-          if (step.data && typeof step.data === 'object' && 'value' in step.data) {
-            element.value = (step.data as any).value || ''
-          } else {
-            element.value = step.value || ''
-          }
+          const v = (step.data as any)?.value ?? step.value ?? ''
+          element.value = v
           element.dispatchEvent(new Event('change', { bubbles: true }))
         }
         break
-
       case 'keydown':
-        if (step.data && typeof step.data === 'object') {
-          const keyData = step.data as any
-          const keyEvent = new KeyboardEvent('keydown', {
-            key: keyData.key,
-            code: keyData.code,
-            ctrlKey: keyData.ctrlKey,
-            altKey: keyData.altKey,
-            shiftKey: keyData.shiftKey,
-            metaKey: keyData.metaKey,
+        if (step.data) {
+          const d = step.data as any
+          element.dispatchEvent(new KeyboardEvent('keydown', {
+            key: d.key, code: d.code,
+            ctrlKey: d.ctrlKey, altKey: d.altKey,
+            shiftKey: d.shiftKey, metaKey: d.metaKey,
             bubbles: true
-          })
-          element.dispatchEvent(keyEvent)
+          }))
         }
         break
-
       case 'focus':
         if (element instanceof HTMLElement) element.focus()
         break
-
       case 'mousedown':
-        if (step.data && typeof step.data === 'object') {
-          const mouseData = step.data as any
-          const mouseEvent = new MouseEvent('mousedown', {
-            bubbles: true,
-            cancelable: true,
-            clientX: mouseData.x,
-            clientY: mouseData.y,
-            button: mouseData.button || 0
-          })
-          element.dispatchEvent(mouseEvent)
+        if (step.data) {
+          const d = step.data as any
+          element.dispatchEvent(new MouseEvent('mousedown', {
+            bubbles: true, cancelable: true,
+            clientX: d.x, clientY: d.y, button: d.button || 0
+          }))
         }
         break
-
       case 'scroll':
-        if (step.data && typeof step.data === 'object') {
-          const scrollData = step.data as any
-          window.scrollTo({
-            left: scrollData.x || 0,
-            top: scrollData.y || 0,
-            behavior: 'smooth'
-          })
+        if (step.data) {
+          const d = step.data as any
+          window.scrollTo({ left: d.x || 0, top: d.y || 0, behavior: 'smooth' })
         }
         break
-
       case 'modal':
         if (element instanceof HTMLElement) element.click()
         break
-
       case 'submit':
         if (element instanceof HTMLFormElement) element.submit()
-        else ;(element as HTMLElement).click()
+        else (element as HTMLElement).click()
         break
-
       default:
         console.warn(`Unknown step type: ${step.type}`)
     }

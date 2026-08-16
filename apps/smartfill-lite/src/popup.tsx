@@ -157,13 +157,9 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
     setApiKeys(prev => ({ ...prev, [provider]: value }))
   }
 
-  const saveUISettings = async () => {
-    try {
-      await chrome.storage.sync.set({ showStatusBar })
-    } catch (error) {
-      console.error('Save UI settings error:', error)
-    }
-  }
+  // The showStatusBar setting is persisted inline in the checkbox
+  // onChange handler (reading the actual event value, not React state,
+  // to avoid a stale-state race). No need for a separate helper here.
 
   if (!isOpen) return null
 
@@ -333,8 +329,14 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
                   type="checkbox"
                   checked={showStatusBar}
                   onChange={(e) => {
-                    setShowStatusBar(e.target.checked)
-                    saveUISettings()
+                    const checked = e.target.checked
+                    setShowStatusBar(checked)
+                    // Persist the actual event value, not the (still
+                    // stale) React state, to avoid a race where
+                    // storage.sync.set writes the previous value.
+                    chrome.storage.sync.set({ showStatusBar: checked }).catch((err) => {
+                      console.error('Save UI settings error:', err)
+                    })
                   }}
                 />
                 <span>Show status bar</span>
