@@ -23,6 +23,9 @@ import type { FormField } from '@/types/extension'
 
 const LONG_SENSITIVE_PATTERNS: ReadonlyArray<string> = [
   'passport',
+  'password',
+  'passwd',
+  'passphrase',
   'aadhaar',
   'social security',
   'credit card',
@@ -59,21 +62,34 @@ const SHORT_SENSITIVE_PATTERNS: ReadonlyArray<string> = [
 ]
 
 const CONSENT_KEYWORDS: ReadonlyArray<string> = [
+  // Recognise clear consent concepts only. We deliberately removed
+  // bare tokens like 'condition', 'legal', 'agreement', 'agree'
+  // because they are general English words that appear in lots of
+  // non-consent contexts:
+  //   - "Medical Conditions" / "Health Condition" (a checkbox for
+  //     pre-existing conditions must NOT be treated as consent)
+  //   - "Legal Name" / "Legal Entity Name" (a free-text identifier
+  //     must NOT be treated as consent)
+  //   - "Agreement Number" / "Contract Agreement ID" (an ID field
+  //     must NOT be treated as consent)
+  // The accept / decline verbs (accept, agree, opt in, ...) used to
+  // detect a directive in the user context live in
+  // `detectConsentDirective` and are unaffected.
   'terms',
-  'condition',
   'privacy',
   'consent',
-  'agree',
-  'agreement',
   'marketing',
   'newsletter',
   'subscribe',
   'subscription',
   'promotional',
   'cookie',
-  'data processing',
-  'legal',
+  'cookies',
   'opt-in',
+  'optin',
+  'gdpr',
+  'tos',
+  'eula',
 ]
 
 /**
@@ -82,12 +98,12 @@ const CONSENT_KEYWORDS: ReadonlyArray<string> = [
  * specific form field.
  */
 const CONSENT_TOPIC_KEYWORDS: Record<string, ReadonlyArray<string>> = {
-  terms: ['terms', 'condition', 'tos', 'eula', 'agreement'],
-  privacy: ['privacy', 'data processing', 'gdpr'],
+  terms: ['terms', 'tos', 'eula'],
+  privacy: ['privacy', 'gdpr'],
   newsletter: ['newsletter', 'subscription', 'mailing list'],
   marketing: ['marketing', 'promotional', 'promo'],
   cookies: ['cookie', 'cookies'],
-  generic: ['consent', 'agree', 'opt-in', 'opt in'],
+  generic: ['consent', 'opt-in', 'opt in', 'optin'],
 }
 
 /**
@@ -121,6 +137,15 @@ function isShortSensitiveToken(token: string): boolean {
 }
 
 export function isSensitiveField(field: FormField): boolean {
+  // Password fields are sensitive by construction. The `type` check
+  // is the canonical path so Safe Filling Mode can always protect
+  // them — even if the field name is something exotic (e.g. "pwd",
+  // "user_pass") that the name/label-based detection below might
+  // not match. The text-based detection further down still covers
+  // the rare case of a non-password-typed field that explicitly
+  // looks like a password (custom widget, etc.).
+  if (field.type === 'password') return true
+
   const haystack = `${field.name} ${field.label || ''} ${field.placeholder || ''}`.trim()
   if (!haystack) return false
 
@@ -174,16 +199,36 @@ export function isConsentField(field: FormField): boolean {
   const tokens = tokenize(haystack)
   if (tokens.length === 0) return false
 
-  // Token-aware match. We require a real token to equal or
-  // start-with a consent keyword. Using `token.includes(k)`
-  // would let "agreement" match "agree" inside unrelated words
-  // like "disagreement" / "re-agreement", etc.
+  // Exact token match only. We deliberately do NOT use
+  // `t.startsWith(k)` because that misclassifies common data
+  // fields as consent:
+  //   - "Medical Conditions"  (token "conditions" starts with the
+  //     old keyword "condition")
+  //   - "Agreement Number" / "Contract Agreement"  (token
+  //     "agreement" starts with the old keyword "agree")
+  //   - "Legal Name" / "Legal Entity Name"  (token "legal" was
+  //     itself a keyword)
+  // The keyword list has been pruned to remove those broad
+  // words, and the matching is now strict equality.
   for (const k of CONSENT_KEYWORDS) {
     for (const t of tokens) {
       if (t === k) return true
-      if (k.length >= 4 && t.startsWith(k)) return true
     }
   }
+
+  // "cookie" and "cookies" are both common and refer to the same
+  // consent concept. The keyword list already contains both, so
+  // the strict equality loop above covers them. This branch is
+  // here as an explicit safety net for future maintainers who may
+  // consolidate the list.
+  if (tokens.includes('cookie') || tokens.includes('cookies')) return true
+
+  // Hyphenated / spaced "opt-in" tokens. After tokenize(),
+  // "opt-in" splits into ["opt", "in"] (because `-` is a
+  // separator) and neither is a keyword on its own. The
+  // original haystack is the source of truth for these phrases.
+  if (/(?:^|\s)opt[-\s]?in(?:$|\s)/.test(haystack)) return true
+
   return false
 }
 
