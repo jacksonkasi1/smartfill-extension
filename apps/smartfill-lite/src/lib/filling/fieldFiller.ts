@@ -407,18 +407,35 @@ function findVisibleListboxNear(trigger: HTMLElement): HTMLElement | null {
 }
 
 function findCustomOption(popup: HTMLElement, value: string): HTMLElement | null {
-  const target = String(value).toLowerCase()
+  const target = String(value).trim().toLowerCase()
+  // Empty target must never pick a real option. Without this guard
+  // "Full Time".includes("") would be true for any option.
+  if (!target) return null
+
   const candidates = popup.querySelectorAll(
     '[role="option"], li[role="option"], li[role="menuitem"], [data-value], li'
   )
+
   for (const c of Array.from(candidates)) {
     const opt = c as HTMLElement
-    const dv = opt.getAttribute('data-value')?.toLowerCase()
+    const dv = (opt.getAttribute('data-value') || '').trim().toLowerCase()
     const text = (opt.textContent || '').trim().toLowerCase()
-    const aria = opt.getAttribute('aria-label')?.toLowerCase()
-    if (dv && (dv === target || dv.includes(target) || target.includes(dv))) return opt
-    if (text && (text === target || text.includes(target) || target.includes(text))) return opt
-    if (aria && (aria === target || aria.includes(target) || target.includes(aria))) return opt
+    const aria = (opt.getAttribute('aria-label') || '').trim().toLowerCase()
+
+    // 1. exact data-value
+    if (dv && dv === target) return opt
+    // 2. exact text
+    if (text && text === target) return opt
+    // 3. exact aria-label
+    if (aria && aria === target) return opt
+    // 4. case-insensitive exact (already lowercased)
+    // 5. substring / fuzzy — only when both sides are non-empty
+    if (dv && dv.includes(target)) return opt
+    if (text && text.includes(target)) return opt
+    if (aria && aria.includes(target)) return opt
+    if (dv && target.includes(dv)) return opt
+    if (text && target.includes(text)) return opt
+    if (aria && target.includes(aria)) return opt
   }
   return null
 }

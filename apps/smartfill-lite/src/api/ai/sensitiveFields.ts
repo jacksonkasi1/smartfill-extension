@@ -45,7 +45,6 @@ const LONG_SENSITIVE_PATTERNS: ReadonlyArray<string> = [
   'cardholder',
 ]
 
-// Short patterns: MUST match on a token boundary only.
 const SHORT_SENSITIVE_PATTERNS: ReadonlyArray<string> = [
   'pin',
   'otp',
@@ -75,21 +74,38 @@ const CONSENT_KEYWORDS: ReadonlyArray<string> = [
   'data processing',
   'legal',
   'opt-in',
-  'opt-in',
 ]
 
 /**
- * Split an identifier-like string into tokens at common boundaries:
- *   - whitespace
- *   - underscores, dashes, dots, slashes
- *   - camelCase boundaries (lowercase -> uppercase)
- *
- * This means `shippingAddress` becomes ['shipping', 'Address'] and
- * `pin-code` becomes ['pin', 'code'].
+ * Mapping of consent field-keywords to the topic they refer to.
+ * Used to associate a consent directive in user context with a
+ * specific form field.
+ */
+const CONSENT_TOPIC_KEYWORDS: Record<string, ReadonlyArray<string>> = {
+  terms: ['terms', 'condition', 'tos', 'eula', 'agreement'],
+  privacy: ['privacy', 'data processing', 'gdpr'],
+  newsletter: ['newsletter', 'subscription', 'mailing list'],
+  marketing: ['marketing', 'promotional', 'promo'],
+  cookies: ['cookie', 'cookies'],
+  generic: ['consent', 'agree', 'opt-in', 'opt in'],
+}
+
+/**
+ * Reverse: a single keyword -> its topic. Built once at module load.
+ */
+const KEYWORD_TO_TOPIC: Map<string, string> = (() => {
+  const map = new Map<string, string>()
+  for (const [topic, kws] of Object.entries(CONSENT_TOPIC_KEYWORDS)) {
+    for (const k of kws) map.set(k, topic)
+  }
+  return map
+})()
+
+/**
+ * Split an identifier-like string into tokens at common boundaries.
  */
 function tokenize(input: string): string[] {
   if (!input) return []
-  // Normalize separators to spaces, then split on camelCase.
   const withSeparators = input
     .replace(/[_\-./\\:]+/g, ' ')
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
@@ -100,19 +116,10 @@ function tokenize(input: string): string[] {
     .filter(Boolean)
 }
 
-/**
- * Is `token` a sensitive short pattern? Exact equality check only.
- */
 function isShortSensitiveToken(token: string): boolean {
   return SHORT_SENSITIVE_PATTERNS.includes(token)
 }
 
-/**
- * Full sensitive-field test for a FormField. Combines long-substring
- * patterns with short-token patterns. Does not depend on regex
- * metachars in the haystack, so the function is safe to call on
- * arbitrary web-supplied strings.
- */
 export function isSensitiveField(field: FormField): boolean {
   const haystack = `${field.name} ${field.label || ''} ${field.placeholder || ''}`.trim()
   if (!haystack) return false
@@ -121,37 +128,241 @@ export function isSensitiveField(field: FormField): boolean {
   for (const p of LONG_SENSITIVE_PATTERNS) {
     if (lower.includes(p)) return true
   }
-
   const tokens = tokenize(haystack)
   for (const t of tokens) {
     if (isShortSensitiveToken(t)) return true
   }
-
   return false
 }
 
-/**
- * Is the field a consent / opt-in control that we must NEVER
- * auto-accept? Detected independently of sensitive fields so that
- * marketing and cookie checkboxes (which are not sensitive) are
- * still guarded.
- */
 export function isConsentField(field: FormField): boolean {
   const haystack =
     `${field.name || ''} ${field.label || ''} ${field.placeholder || ''}`.toLowerCase()
   if (!haystack.trim()) return false
   return CONSENT_KEYWORDS.some(k => {
-    // Match whole-word style for these too, so "conditioning" does
-    // not trip a "condition" match.
     const tokens = tokenize(haystack)
     return tokens.some(t => t === k || t.startsWith(k) || t.includes(k))
   })
 }
 
 /**
- * Tokenize user context (custom instructions) into a normalized set
- * of explicit values. Used by the parser to decide whether a sensitive
- * value is allowed.
+ * Determine which consent topic a field belongs to. Returns
+ * 'generic' if no specific topic matches.
+ */
+function detectConsentTopic(field: FormField): string {
+  const tokens = tokenize(
+    `${field.name || ''} ${field.label || ''} ${field.placeholder || ''}`
+  )
+  for (const t of tokens) {
+    if (KEYWORD_TO_TOPIC.has(t)) return KEYWORD_TO_TOPIC.get(t)!
+  }
+  // Substring fallback: check the haystack for each topic's keywords
+  const haystack = `${field.name || ''} ${field.label || ''} ${field.placeholder || ''}`.toLowerCase()
+  for (const [topic, kws] of Object.entries(CONSENT_TOPIC_KEYWORDS)) {
+    if (topic === 'generic') continue
+    if (kws.some(k => haystack.includes(k))) return topic
+  }
+  return 'generic'
+}
+
+/**
+ * Field-aware consent directive. We split the user context into
+ * tokens / lines and only treat a directive as authoritative when
+ * the affirm/deny verb and the consent topic appear close enough to
+ * each other (same sentence, or the same line if no sentences).
+ *
+ * Generic affirm verbs (yes / on / allow / enable) are NEVER enough
+ * on their own — they have to be tied to a consent topic. A user
+ * writing "I work in London" must not flip terms to true just because
+ * the substring "on" appears.
+ */
+export function detectConsentDirective(
+  customInstructions: string | undefined,
+  field: FormField
+): 'accept' | 'decline' | 'none' {
+  if (!customInstructions || !customInstructions.trim()) return 'none'
+  if (!isConsentField(field)) return 'none'
+
+  const topic = detectConsentTopic(field)
+  const topicKeywords = CONSENT_TOPIC_KEYWORDS[topic] || CONSENT_TOPIC_KEYWORDS.generic
+
+  // Split context into sentences (or single lines if no punctuation).
+  const segments = customInstructions
+    .split(/[.!?\n]+/)
+    .map(s => s.trim())
+    .filter(Boolean)
+
+  for (const segment of segments) {
+    const segLower = segment.toLowerCase()
+    const segTokens = tokenize(segment)
+
+    // Affirm / decline must BOTH appear in the segment AND the
+    // topic must be mentioned. "I work in London" -> no affirm verb
+    // for the topic, so 'none'. "Yes I have experience" -> "yes" is
+    // a weak affirm but no consent topic mentioned, so 'none'.
+    const hasAcceptVerb = /\b(accept|agree|opt[\s-]?in|consent to|allow|enable|subscribe to|sign up)\b/i.test(segment)
+    const hasDeclineVerb = /\b(decline|reject|refuse|opt[\s-]?out|do not|don't|don\u2019t|no thanks|unsubscribe|disable)\b/i.test(segment)
+    if (!hasAcceptVerb && !hasDeclineVerb) continue
+
+    const topicMentioned =
+      topicKeywords.some(k => segLower.includes(k)) ||
+      segTokens.some(t => topicKeywords.includes(t))
+
+    if (!topicMentioned) continue
+
+    if (hasDeclineVerb) return 'decline'
+    if (hasAcceptVerb) return 'accept'
+  }
+
+  return 'none'
+}
+
+// ---------------------------------------------------------------------------
+// Sensitive-context extraction
+// ---------------------------------------------------------------------------
+
+/**
+ * Map from a sensitive field to a list of keys that would associate
+ * a value in the user context with that field. The key matching is
+ * case-insensitive and tolerant of separators.
+ */
+const SENSITIVE_FIELD_KEYS: Record<string, ReadonlyArray<string>> = {
+  passport: ['passport'],
+  aadhaar: ['aadhaar', 'aadhar', 'aadhaar number', 'aadhaar no'],
+  pan: ['pan', 'pan number', 'pan no', 'pan card'],
+  ssn: ['ssn', 'social security', 'social security number'],
+  creditcard: ['credit card', 'creditcard', 'card number', 'cc number', 'ccv'],
+  cvv: ['cvv', 'cvc', 'card security code', 'security code'],
+  pin: ['pin', 'pin number', 'pincode', 'pin code', 'security pin', 'atm pin'],
+  otp: ['otp', 'one time password', 'one-time password', 'verification code'],
+  bank: ['bank account', 'account number', 'iban', 'swift', 'bic'],
+  taxid: ['tax id', 'taxid', 'tin'],
+  password: ['password', 'passwd', 'passphrase'],
+  secret: ['secret', 'auth code', 'authorization code'],
+  dob: ['date of birth', 'dob', 'birthday', 'birth date'],
+}
+
+/**
+ * Map a sensitive field to the keys that would identify it in user
+ * context. Falls back to the field's own name / label.
+ */
+function keysForSensitiveField(field: FormField): string[] {
+  const fhaystack = `${field.name} ${field.label || ''}`.toLowerCase()
+  for (const [canonical, keys] of Object.entries(SENSITIVE_FIELD_KEYS)) {
+    if (keys.some(k => fhaystack.includes(k))) return [...keys]
+  }
+  // Fallback: use field name tokens
+  return tokenize(field.name || '')
+}
+
+/**
+ * Parse a string of "key: value" / "key = value" / "key is value"
+ * / "use VALUE for KEY" pairs. Very loose — we don't try to be a
+ * full NLP parser, we just extract the obvious assignments.
+ *
+ * Returns a Map<key, value[]> so a key can appear more than once.
+ */
+export type ExplicitContextMap = Map<string, string[]>
+
+function stripQuotes(s: string): string {
+  return s.replace(/^["'`]+|["'`]+$/g, '').trim()
+}
+
+function splitOnConnectors(line: string): { key: string; value: string }[] {
+  const out: { key: string; value: string }[] = []
+  // Patterns: "key: value", "key = value", "key is value",
+  // "use value for key", "set key to value".
+  const patterns: RegExp[] = [
+    /([A-Za-z][A-Za-z0-9 _\-\.]{0,40}?)\s*[:=]\s*([^\n,;]+?)(?=\s*(?:[,.;]|$|\n))/g,
+    /\b([A-Za-z][A-Za-z0-9 _\-\.]{0,40}?)\s+is\s+([^\n,;]+?)(?=\s*(?:[,.;]|$|\n))/gi,
+    /\buse\s+([^\n,;]+?)\s+for\s+([A-Za-z][A-Za-z0-9 _\-\.]{0,40}?)(?=\s*(?:[,.;]|$|\n))/gi,
+    /\bset\s+([A-Za-z][A-Za-z0-9 _\-\.]{0,40}?)\s+to\s+([^\n,;]+?)(?=\s*(?:[,.;]|$|\n))/gi,
+  ]
+
+  for (const re of patterns) {
+    let m: RegExpExecArray | null
+    while ((m = re.exec(line)) !== null) {
+      // "use V for K" puts value at 1, key at 2; others put key at 1, value at 2.
+      if (re === patterns[2]) {
+        out.push({ key: m[2].trim(), value: stripQuotes(m[1]) })
+      } else {
+        out.push({ key: m[1].trim(), value: stripQuotes(m[2]) })
+      }
+    }
+  }
+  return out
+}
+
+function normalizeKey(key: string): string {
+  return key.toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * Build a map of explicit key -> value assignments from the user's
+ * customInstructions. Values are kept verbatim (after trimming).
+ */
+export function extractExplicitContextMap(customInstructions: string | undefined): ExplicitContextMap {
+  const map: ExplicitContextMap = new Map()
+  if (!customInstructions) return map
+  const lines = customInstructions.split(/\n|[.!?]+/)
+  for (const line of lines) {
+    if (!line.trim()) continue
+    const pairs = splitOnConnectors(line)
+    for (const { key, value } of pairs) {
+      const k = normalizeKey(key)
+      const v = value.trim()
+      if (!k || !v) continue
+      const list = map.get(k) || []
+      list.push(v)
+      map.set(k, list)
+    }
+  }
+  return map
+}
+
+function anyKeyMatches(key: string, candidates: ReadonlyArray<string>): boolean {
+  const norm = key.toLowerCase()
+  return candidates.some(c => norm === c.toLowerCase() || norm.includes(c.toLowerCase()))
+}
+
+/**
+ * Is `value` allowed for `field` given the explicit context map?
+ *
+ * Returns true only when one of the field's expected keys appears in
+ * the map and the map's recorded value(s) contain `value` (exact or
+ * as a sub-token). Bare token-presence-in-context is no longer
+ * sufficient.
+ */
+export function isSensitiveValueAllowed(
+  field: FormField,
+  value: string,
+  contextMap: ExplicitContextMap
+): boolean {
+  if (!value) return false
+  const v = value.trim()
+  if (!v) return false
+  const expectedKeys = keysForSensitiveField(field)
+  if (expectedKeys.length === 0) return false
+
+  for (const [mapKey, mapValues] of contextMap.entries()) {
+    if (!anyKeyMatches(mapKey, expectedKeys)) continue
+    for (const stored of mapValues) {
+      if (!stored) continue
+      if (stored.trim() === v) return true
+      // Allow exact-token containment in either direction
+      if (stored.trim().includes(v) || v.includes(stored.trim())) return true
+    }
+  }
+  return false
+}
+
+// ---------------------------------------------------------------------------
+// Backwards-compatible token-based helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Tokenize user context into a normalized set of explicit values.
+ * Kept for compatibility with code that only needs a token search.
  */
 export function extractExplicitContextTokens(customInstructions: string | undefined): Set<string> {
   const tokens = new Set<string>()
@@ -162,8 +373,6 @@ export function extractExplicitContextTokens(customInstructions: string | undefi
   for (const t of tokenize(normalized)) {
     if (t.length > 0) tokens.add(t)
   }
-  // Also keep every whitespace-delimited chunk so exact-phrase
-  // matches like "N1234567" or "ABCDE1234F" work.
   for (const chunk of normalized.split(/\s+/)) {
     if (chunk) tokens.add(chunk.toLowerCase())
   }
@@ -171,40 +380,8 @@ export function extractExplicitContextTokens(customInstructions: string | undefi
 }
 
 /**
- * Words that, when they appear in user context near a consent
- * field, indicate the user is opting in. Used to allow
- * "accept the terms" / "subscribe to newsletter" even though
- * the AI's value is a boolean "true" with no other context.
- */
-const CONSENT_AFFIRM_KEYWORDS: ReadonlyArray<string> = [
-  'accept', 'agree', 'opted-in', 'opt-in', 'opt in',
-  'subscribe', 'sign up', 'signup',
-  'yes', 'consent', 'allow', 'enable', 'on'
-]
-const CONSENT_DENY_KEYWORDS: ReadonlyArray<string> = [
-  'do not', 'don\u2019t', 'don\u2018t', 'don\u2019t',
-  'decline', 'reject', 'refuse', 'opt-out', 'opt out',
-  'no thanks', 'unsubscribe', 'disable', 'off'
-]
-
-/**
- * Does the user context contain an explicit accept / decline for
- * consent / opt-in fields?
- *
- *   return value: 'accept' | 'decline' | 'none'
- */
-export function detectConsentDirective(customInstructions: string | undefined): 'accept' | 'decline' | 'none' {
-  if (!customInstructions) return 'none'
-  const lower = customInstructions.toLowerCase()
-  if (CONSENT_DENY_KEYWORDS.some(k => lower.includes(k))) return 'decline'
-  if (CONSENT_AFFIRM_KEYWORDS.some(k => lower.includes(k))) return 'accept'
-  return 'none'
-}
-
-/**
- * Does the user context explicitly contain the given candidate value
- * (as a token or a contiguous substring of a chunk)? Used to allow
- * sensitive values when the user typed them in.
+ * Does the user context contain the candidate value as a token?
+ * Used by non-sensitive paths.
  */
 export function isValueExplicitInContext(value: string, tokens: Set<string>): boolean {
   if (!value) return false

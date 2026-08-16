@@ -1,11 +1,13 @@
 // ** import types
 import type { AIFormData, FormField } from '@/types/extension'
 
-// ** import shared sensitive/consent helpers
+// ** import shared sensitive / consent helpers
 import {
   isSensitiveField,
   isConsentField,
   extractExplicitContextTokens,
+  extractExplicitContextMap,
+  isSensitiveValueAllowed,
   isValueExplicitInContext,
   detectConsentDirective
 } from './sensitiveFields'
@@ -15,15 +17,17 @@ import {
  *
  * Behaviour:
  *   - Tolerates surrounding prose and markdown code fences.
- *   - For sensitive fields, only allows a value if it explicitly
- *     appears in the user's `customInstructions` context. This way
- *     a user who types "Passport: N1234567" can still fill the
- *     passport field, but the AI cannot invent a fake one.
+ *   - For sensitive fields, only allows a value when the user
+ *     context contains an explicit `key: value` pair that
+ *     associates the value with that specific field. A bare
+ *     token-presence-in-context check is no longer sufficient.
  *   - For consent fields (terms / privacy / newsletter / etc.),
- *     default to false / unchecked unless the AI's value was
- *     clearly instructed by the user's context.
- *   - Empty string for sensitive fields is preserved as the user's
- *     intent (the field is left blank).
+ *     default to false / unchecked. The user context must
+ *     contain a consent directive tied to the field's topic
+ *     (e.g. "accept the terms" for a Terms checkbox) to flip it
+ *     to true.
+ *   - Empty string for sensitive fields is preserved as the
+ *     user's intent.
  */
 export function parseAIResponse(
   response: string,
@@ -40,8 +44,12 @@ export function parseAIResponse(
     throw new Error(`Failed to parse AI response JSON: ${(err as Error).message}`)
   }
 
+  // Build a structured map of explicit assignments from the user
+  // context. The parser uses this to decide whether a sensitive
+  // value is associated with the right field.
+  const contextMap = extractExplicitContextMap(customInstructions)
+  // Tokens are still useful for non-sensitive field matching.
   const contextTokens = extractExplicitContextTokens(customInstructions)
-  const consentDirective = detectConsentDirective(customInstructions)
   const cleaned: AIFormData = {}
   const missing: string[] = []
 
@@ -56,42 +64,35 @@ export function parseAIResponse(
       continue
     }
 
-    // Normalize to string for the cross-check against context. We do
-    // NOT require a minimum length here — a 3-digit CVV the user
-    // typed explicitly must be honoured.
     const asString = normalizeToString(raw)
-    const explicit = isValueExplicitInContext(asString, contextTokens)
 
     if (sensitive) {
+      // Sensitive value must be associated with this specific field
+      // by an explicit key/value pair in the user context.
       if (asString === '') {
         cleaned[field.name] = ''
-      } else if (explicit) {
+      } else if (isSensitiveValueAllowed(field, asString, contextMap)) {
         cleaned[field.name] = asString
       } else {
-        // Sensitive but not in the user's context: blank it. We
-        // do this even for numbers, booleans, and short strings,
-        // because the AI should not have invented them.
         cleaned[field.name] = ''
       }
       continue
     }
 
     if (consent) {
-      // Consent default = off. The AI may only set true if either:
-      //   1) the user explicitly said so in the context, OR
-      //   2) the value itself is explicit and affirmative, OR
-      //   3) the user context contains an accept-style directive.
       if (asString === '') {
         cleaned[field.name] = ''
         continue
       }
       const truthy = isTruthyValue(raw)
-      const affirmativeValue = truthy && explicit
+      // Field-aware consent: pass the field in so we can check the
+      // consent topic against the user context.
+      const directive = detectConsentDirective(customInstructions, field)
       const affirmativeContext =
-        (consentDirective === 'accept' && truthy) ||
-        (consentDirective === 'decline' && !truthy)
-      if (!affirmativeValue && !affirmativeContext) {
-        // No explicit signal -> do not auto-accept.
+        (directive === 'accept' && truthy) ||
+        (directive === 'decline' && !truthy)
+      const affirmativeValue = truthy && isValueExplicitInContext(asString, contextTokens)
+      if (!affirmativeContext && !affirmativeValue) {
         cleaned[field.name] = field.type === 'checkbox' ? false : ''
         continue
       }
@@ -180,17 +181,13 @@ function fallbackForField(
   sensitive: boolean,
   consent: boolean
 ): string | boolean | string[] {
-  // Sensitive or consent: blank / off, never a guessed value.
   if (sensitive) return ''
   if (consent) {
     if (field.type === 'checkbox') return false
     return ''
   }
-
   if (field.type === 'checkbox') {
     if (field.options && field.options.length > 1) return [field.options[0]]
-    // Single checkbox: only default to true for explicitly "required"
-    // agreement-like fields, never just because `required` is set.
     return false
   }
   if (field.type === 'radio' || field.type === 'select') {
