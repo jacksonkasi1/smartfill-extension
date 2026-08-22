@@ -1,0 +1,34 @@
+{
+  "name": "smartfill-lite",
+  "displayName": "SmartFill Lite - AI Form Filler",
+  "version": "1.0.1",
+  "description": "SmartFill Lite Chrome Extension - no auth, no backend, just AI form filling",
+  "scripts": {
+    "dev": "plasmo dev",
+    "build": "plasmo build",
+    "package": "plasmo package",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test tests/"
+  },
+  "keywords": ["chrome-extension", "ai", "form-filling", "lite", "no-auth"],
+  "author": "SmartFill Team",
+  "license": "ISC",
+  "type": "module",
+  "manifest": {
+    "name": "SmartFill Lite - AI Form Filler",
+    "permissions": ["storage", "activeTab", "tabs", "scripting"],
+    "host_permissions": ["http://*/*", "https://*/*"]
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.1.4",
+    "@types/node": "^22.5.4",
+    "@types/react": "^18.3.10",
+    "@types/react-dom": "^18.3.0",
+    "plasmo": "^0.90.5",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}
