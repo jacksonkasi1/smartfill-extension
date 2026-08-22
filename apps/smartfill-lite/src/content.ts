@@ -7,7 +7,7 @@ import type { RecordingSession, RecordingStep } from './types/recording'
 import { MessageListener, MessagingClient, WebsiteEvents, MESSAGE_ACTIONS } from "@/lib/utils/messaging"
 
 // ** import lib
-import { detectAllForms, fillForm } from './lib'
+import { detectAllForms, fillForm, normalizeFormFields } from './lib'
 
 // ** import apis
 import { generateFormData } from './api'
@@ -107,9 +107,11 @@ async function fillForms(customPrompt?: string): Promise<FillResult> {
   // Default OFF — never default this to true. Existing users with
   // no stored setting must receive unrestricted filling.
   let safeFillingMode = false
+  let debugMode = false
   try {
-    const stored = await chrome.storage.sync.get(['safeFillingMode'])
+    const stored = await chrome.storage.sync.get(['safeFillingMode', 'debugMode'])
     safeFillingMode = stored.safeFillingMode === true
+    debugMode = stored.debugMode === true
   } catch (err) {
     console.error('[SmartFill] Failed to read safeFillingMode setting:', err)
   }
@@ -122,7 +124,18 @@ async function fillForms(customPrompt?: string): Promise<FillResult> {
   if (!detectResult.success || detectResult.forms.length === 0) {
     return { success: false, filled: 0, errors: ['No forms detected on this page'] }
   }
-  const allFields = detectResult.forms.flatMap(f => f.fields)
+  const rawFields = detectResult.forms.flatMap(f => f.fields)
+  const normalized = normalizeFormFields(rawFields)
+  const allFields = normalized.fields
+  if (debugMode) {
+    console.debug('[SmartFill] extraction:', {
+      'Raw candidates': normalized.stats.rawCount,
+      'Normalized fields': normalized.stats.normalizedCount,
+      'Duplicates removed': normalized.stats.duplicatesRemoved,
+      'Non-form controls removed': normalized.stats.unusableRemoved,
+      duplicateGroups: normalized.stats.duplicateGroups
+    })
+  }
   if (allFields.length === 0) {
     return { success: false, filled: 0, errors: ['No fillable fields found'] }
   }

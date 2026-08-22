@@ -1,7 +1,7 @@
 {
   "name": "smartfill-lite",
   "displayName": "SmartFill Lite - AI Form Filler",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "SmartFill Lite Chrome Extension - no auth, no backend, just AI form filling",
   "scripts": {
     "dev": "plasmo dev",

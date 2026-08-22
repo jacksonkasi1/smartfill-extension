@@ -5,6 +5,7 @@
 // the active detection pipeline.
 
 export * from './formDetection'
+export * from './fieldNormalization'
 export * from './fieldValidation'
 export * from './fieldTypes'
 export * from './fieldNames'

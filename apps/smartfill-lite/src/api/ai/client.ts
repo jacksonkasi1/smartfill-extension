@@ -8,6 +8,7 @@ import { PROVIDERS, DEFAULT_PROVIDER, DEFAULT_MODELS, LLM_GENERATION_CONFIG } fr
 // ** import utils
 import { buildPrompt, type ModelMetadata } from './prompt'
 import { parseAIResponse } from './parser'
+import { normalizeFormFields } from '@/lib/detection/fieldNormalization'
 
 // ** Provider Settings Interface
 interface ProviderSettings {
@@ -201,6 +202,9 @@ export async function generateFormData(
   customPrompt?: string,
   options: GenerateFormDataOptions = {}
 ): Promise<AIResult> {
+  // Keep the AI boundary canonical even when this public API is called
+  // without going through the content-script orchestration.
+  fields = normalizeFormFields(fields).fields
   const { provider, model, apiKey } = await getProviderSettings()
 
   const isRecommended = PROVIDERS[provider].models.some(m => m.id === model)
