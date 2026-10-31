@@ -49,22 +49,6 @@ export interface ExtensionResponse {
   state?: RecordingState
 }
 
-export interface ExtensionSettings {
-  enabled: boolean
-  autoFill: boolean
-  debugMode: boolean
-  llmProvider: 'gemini' | 'groq' | 'openrouter'
-  llmModel: string
-  llmApiKeys: {
-    gemini?: string
-    groq?: string
-    openrouter?: string
-  }
-  smartDetection: boolean
-  confirmBeforeFill: boolean
-  fillDelay: number
-}
-
 export interface FormField {
   id: string
   name: string

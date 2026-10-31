@@ -1,0 +1,308 @@
+:root {
+  --page: #f5f5f7;
+  --page-glow-1: rgba(16, 185, 129, 0.18);
+  --page-glow-2: rgba(132, 204, 22, 0.12);
+  --page-glow-3: rgba(48, 209, 88, 0.1);
+  --glass: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.9);
+  --bg: #fff;
+  --surface: rgba(118, 118, 128, 0.08);
+  --surface-2: rgba(118, 118, 128, 0.12);
+  --border: rgba(60, 60, 67, 0.12);
+  --border-strong: rgba(60, 60, 67, 0.24);
+  --text: #1d1d1f;
+  --muted: #6e6e73;
+  --faint: #a1a1a6;
+  --primary: #059669;
+  --primary-2: #047857;
+  --primary-hover: #0a9f70;
+  --primary-soft: rgba(5, 150, 105, 0.11);
+  --primary-text: #fff;
+  --success: #248a3d;
+  --success-bg: rgba(52, 199, 89, 0.14);
+  --success-dot: #30d158;
+  --warning: #b25000;
+  --warning-bg: rgba(255, 149, 0, 0.14);
+  --error: #d70015;
+  --error-bg: rgba(255, 59, 48, 0.11);
+  --shadow: 0 1px 1px rgba(0, 0, 0, 0.03), 0 8px 28px rgba(15, 23, 42, 0.07);
+  --radius: 18px;
+  color-scheme: light;
+  color: var(--text);
+  background: var(--page);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI", Inter, system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #000;
+    --page-glow-1: rgba(16, 185, 129, 0.2);
+    --page-glow-2: rgba(132, 204, 22, 0.12);
+    --page-glow-3: rgba(48, 209, 88, 0.1);
+    --glass: rgba(28, 28, 30, 0.72);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --bg: #1c1c1e;
+    --surface: rgba(118, 118, 128, 0.18);
+    --surface-2: rgba(118, 118, 128, 0.24);
+    --border: rgba(84, 84, 88, 0.4);
+    --border-strong: rgba(84, 84, 88, 0.65);
+    --text: #f5f5f7;
+    --muted: rgba(235, 235, 245, 0.6);
+    --faint: rgba(235, 235, 245, 0.3);
+    --primary: #34d399;
+    --primary-hover: #6ee7b7;
+    --primary-soft: rgba(52, 211, 153, 0.16);
+    --success: #30d158;
+    --success-bg: rgba(48, 209, 88, 0.16);
+    --warning: #ffd60a;
+    --warning-bg: rgba(255, 159, 10, 0.16);
+    --error: #ff6961;
+    --error-bg: rgba(255, 69, 58, 0.16);
+    --shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 8px 28px rgba(0, 0, 0, 0.4);
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100%;
+  background:
+    radial-gradient(120% 55% at 0% 0%, var(--page-glow-1), transparent 60%),
+    radial-gradient(90% 50% at 100% 0%, var(--page-glow-2), transparent 60%),
+    radial-gradient(80% 40% at 50% 100%, var(--page-glow-3), transparent 70%),
+    var(--page);
+  background-attachment: fixed;
+}
+
+h1, h2 { letter-spacing: -0.02em; }
+
+button, select, input, textarea {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 80ms, box-shadow 0.15s, opacity 0.15s, color 0.15s;
+}
+button:hover:not(:disabled) { background: var(--surface); }
+button:active:not(:disabled) { transform: scale(0.98); }
+button:disabled { cursor: default; opacity: 0.5; }
+
+button.primary {
+  border-color: transparent;
+  /* Fixed deep emerald in both themes keeps white text readable. */
+  background: linear-gradient(180deg, #10b981 0%, #059669 55%, #047857 140%);
+  color: var(--primary-text);
+  font-weight: 600;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.25), 0 6px 18px rgba(5, 150, 105, 0.32);
+}
+button.primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #22c58b 0%, #0a9f70 55%, #047857 140%);
+}
+
+select,
+input[type="text"],
+input[type="password"],
+input[type="url"],
+textarea {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+select {
+  appearance: none;
+  padding-right: 30px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  cursor: pointer;
+}
+select:disabled { cursor: default; opacity: 0.6; }
+
+select:focus,
+input:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px var(--primary-soft);
+}
+
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+textarea { resize: vertical; }
+
+/* Segmented control */
+.segmented {
+  display: flex;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--surface-2);
+}
+.segmented button {
+  flex: 1;
+  gap: 5px;
+  padding: 5px 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+}
+.segmented button:hover:not(:disabled) { background: transparent; }
+.segmented button.active,
+.segmented button.active:hover:not(:disabled) {
+  background: var(--bg);
+  font-weight: 600;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 3px 1px rgba(0, 0, 0, 0.04);
+}
+
+/* Glass card */
+.card {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+}
+
+/* Status line */
+.status {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--muted);
+  font-weight: 500;
+}
+.status svg, .status .spinner { flex: none; margin-top: 1px; }
+.status-text { min-width: 0; overflow-wrap: anywhere; }
+.status.success { background: var(--success-bg); color: var(--success); }
+.status.warning { background: var(--warning-bg); color: var(--warning); }
+.status.error { background: var(--error-bg); color: var(--error); }
+.status.loading { background: var(--primary-soft); color: var(--primary); }
+
+.inline-link {
+  display: inline;
+  margin-left: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}
+.inline-link:hover:not(:disabled) { background: none; }
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border: 2px solid;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Toggle switch */
+.toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+.toggle input {
+  position: relative;
+  flex: none;
+  width: 38px;
+  height: 23px;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--surface-2);
+  appearance: none;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.toggle input::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s;
+}
+.toggle input:checked { background: var(--success-dot); }
+.toggle input:checked::after { transform: translateX(15px); }
+.toggle-copy { display: flex; flex-direction: column; gap: 2px; }
+.toggle-copy small { color: var(--muted); font-size: 12px; }
+
+/* Mic button inside text areas */
+.textarea-wrap { position: relative; }
+.textarea-wrap textarea { padding-right: 38px; }
+.mic-button {
+  position: absolute;
+  right: 6px;
+  bottom: 8px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--muted);
+}
+.mic-button:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
+.mic-button.listening {
+  background: var(--error);
+  color: #fff;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(255, 59, 48, 0); }
+}
+
+kbd {
+  min-width: 18px;
+  padding: 1px 4px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--glass);
+  box-shadow: 0 1px 0 var(--border);
+  color: var(--muted);
+  font: inherit;
+  font-size: 10px;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

@@ -39,7 +39,11 @@ export function parseAIResponse(
   response: string,
   fields: FormField[],
   customInstructions?: string,
-  options: { safeFillingMode?: boolean } = {}
+  options: {
+    safeFillingMode?: boolean
+    /** Values for fields the AI omitted (the mock persona), instead of generic placeholders. */
+    fallback?: Record<string, unknown>
+  } = {}
 ): AIFormData {
   const jsonText = extractFirstJsonObject(response)
   if (!jsonText) throw new Error('No JSON found in AI response')
@@ -72,7 +76,12 @@ export function parseAIResponse(
 
     if (raw === undefined || raw === null) {
       missing.push(field.name)
-      cleaned[field.name] = fallbackForField(field, sensitive, consent, safeFillingMode)
+      const protectedBlank = safeFillingMode && (sensitive || consent)
+      if (options.fallback && !protectedBlank && field.name in options.fallback) {
+        cleaned[field.name] = options.fallback[field.name] as AIFormData[string]
+      } else {
+        cleaned[field.name] = fallbackForField(field, sensitive, consent, safeFillingMode)
+      }
       continue
     }
 

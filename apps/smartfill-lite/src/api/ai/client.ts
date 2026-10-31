@@ -1,20 +1,28 @@
 // ** import types
 import type { AIFormData, FormField } from '@/types/extension'
 import type { LLMProvider } from './constants'
-
-// ** import constants
-import { PROVIDERS, DEFAULT_PROVIDER, DEFAULT_MODELS, LLM_GENERATION_CONFIG } from './constants'
+import type { PromptContext } from './prompt'
 
 // ** import utils
-import { buildPrompt, type ModelMetadata } from './prompt'
+import { buildPrompt, SYSTEM_PROMPT } from './prompt'
 import { parseAIResponse } from './parser'
 import { normalizeFormFields } from '@/lib/detection/fieldNormalization'
 
-// ** Provider Settings Interface
-interface ProviderSettings {
+// ** import constants
+import { PROVIDERS, LLM_GENERATION_CONFIG } from './constants'
+import { MESSAGE_ACTIONS } from '@/lib/utils/messaging/types'
+
+/** Everything needed to talk to one provider. Resolved from settings by the caller. */
+export interface ProviderRequest {
   provider: LLMProvider
-  model: string
   apiKey: string
+  model: string
+  baseUrl: string
+}
+
+export interface ChatRequest extends ProviderRequest {
+  system: string
+  user: string
 }
 
 /**
@@ -31,7 +39,7 @@ export interface AIResult {
 }
 
 /** Maximum time we wait for any single AI provider response. */
-const PROVIDER_TIMEOUT_MS = 30_000
+const PROVIDER_TIMEOUT_MS = 45_000
 
 /**
  * fetch() with a hard timeout. Aborts the request when the timeout
@@ -46,130 +54,193 @@ async function fetchWithTimeout(
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
     return await fetch(url, { ...init, signal: controller.signal })
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') throw new Error('AI request timed out. Please try again.')
+    throw new Error(`Could not reach ${new URL(url).host}. Check the base URL and your connection.`)
   } finally {
     clearTimeout(timer)
   }
 }
 
-function timeoutErrorMessage(): string {
-  return 'AI request timed out. Please try again.'
-}
-
-async function getProviderSettings(): Promise<ProviderSettings> {
-  const result = await chrome.storage.sync.get([
-    'llmProvider', 'llmModel', 'llmApiKeys'
-  ])
-  const provider: LLMProvider = (result.llmProvider as LLMProvider) || DEFAULT_PROVIDER
-  const apiKeys = (result.llmApiKeys as Record<string, string>) || {}
-  const apiKey = apiKeys[provider]
-  if (!apiKey) {
-    throw new Error(`No API key found for ${PROVIDERS[provider].name}. Please configure it in settings.`)
-  }
-  const model = (result.llmModel as string) || DEFAULT_MODELS[provider]
-  return { provider, model, apiKey }
-}
-
-async function callGeminiAPI(prompt: string, model: string, apiKey: string): Promise<string> {
-  // The API key is sent as the x-goog-api-key header rather than
-  // embedded in the query string, so it does not end up in proxy
-  // logs, browser history, or referer headers.
-  const url = `${PROVIDERS.gemini.baseUrl}/${encodeURIComponent(model)}:generateContent`
-  let response: Response
+/** Turn a provider error response into a short, actionable message. */
+async function providerError(response: Response, providerName: string): Promise<Error> {
+  let detail = ''
   try {
-    response = await fetchWithTimeout(url, {
+    const data = await response.json()
+    detail = data?.error?.message || data?.message || data?.detail || ''
+    if (typeof detail !== 'string') detail = JSON.stringify(detail)
+  } catch { /* keep empty */ }
+
+  if (response.status === 401 || response.status === 403) {
+    return new Error(`${providerName} rejected the API key. ${detail}`.trim())
+  }
+  if (response.status === 429) {
+    return new Error(`${providerName} rate limit reached. Wait a moment and retry.`)
+  }
+  if (response.status === 404) {
+    return new Error(`${providerName}: model or endpoint not found. ${detail}`.trim())
+  }
+  return new Error(detail || `${providerName} error ${response.status} ${response.statusText}`)
+}
+
+function authHeaders(req: ProviderRequest): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (req.apiKey) headers.Authorization = `Bearer ${req.apiKey}`
+  if (req.provider === 'openrouter') {
+    headers['HTTP-Referer'] = 'https://github.com/jacksonkasi1/smartfill-extension'
+    headers['X-Title'] = 'SmartFill'
+  }
+  return headers
+}
+
+// ---------------------------------------------------------------------------
+// Chat adapters
+// ---------------------------------------------------------------------------
+
+async function callOpenAICompatible(req: ChatRequest): Promise<string> {
+  const name = PROVIDERS[req.provider].name
+  const messages = [
+    { role: 'system', content: req.system },
+    { role: 'user', content: req.user }
+  ]
+  const send = (body: Record<string, unknown>) =>
+    fetchWithTimeout(`${req.baseUrl}/chat/completions`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey
-      },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+      headers: authHeaders(req),
+      body: JSON.stringify({ model: req.model, messages, ...body })
     })
-  } catch (err) {
-    if ((err as Error).name === 'AbortError') throw new Error(timeoutErrorMessage())
-    throw err
+
+  let response = await send({
+    temperature: LLM_GENERATION_CONFIG.temperature,
+    max_tokens: LLM_GENERATION_CONFIG.maxTokens
+  })
+  // Reasoning models (o-series, gpt-5, …) reject custom temperature
+  // and the legacy max_tokens field. Retry once with defaults.
+  if (response.status === 400) {
+    const text = await response.clone().text()
+    if (/temperature|max_tokens|unsupported/i.test(text)) response = await send({})
   }
-  if (!response.ok) {
-    let message = `Gemini API error: ${response.status} ${response.statusText}`
-    try {
-      const data = await response.json()
-      if (data.error?.message) message = data.error.message
-    } catch { /* keep default */ }
-    throw new Error(message)
-  }
+  if (!response.ok) throw await providerError(response, name)
+
   const data = await response.json()
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text
-  if (!text) throw new Error('No content generated by Gemini AI')
+  const content = data.choices?.[0]?.message?.content
+  const text = Array.isArray(content) ? content.map((part: any) => part.text ?? '').join('') : content
+  if (!text) throw new Error(`${name} returned an empty response.`)
   return text
 }
 
-async function callGroqAPI(prompt: string, model: string, apiKey: string): Promise<string> {
-  const url = `${PROVIDERS.groq.baseUrl}/chat/completions`
-  let response: Response
-  try {
-    response = await fetchWithTimeout(url, {
+async function callAnthropic(req: ChatRequest): Promise<string> {
+  const response = await fetchWithTimeout(`${req.baseUrl}/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': req.apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: req.model,
+      max_tokens: LLM_GENERATION_CONFIG.maxTokens,
+      system: req.system,
+      messages: [{ role: 'user', content: req.user }]
+    })
+  })
+  if (!response.ok) throw await providerError(response, PROVIDERS.anthropic.name)
+  const data = await response.json()
+  const text = (data.content || [])
+    .filter((block: any) => block.type === 'text')
+    .map((block: any) => block.text)
+    .join('')
+  if (!text) throw new Error('Claude returned an empty response.')
+  return text
+}
+
+async function callGemini(req: ChatRequest): Promise<string> {
+  // The key travels in the x-goog-api-key header, not the query string,
+  // so it never lands in proxy logs or referer headers.
+  const model = req.model.replace(/^models\//, '')
+  const response = await fetchWithTimeout(
+    `${req.baseUrl}/models/${encodeURIComponent(model)}:generateContent`,
+    {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': req.apiKey },
       body: JSON.stringify({
-        model,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: LLM_GENERATION_CONFIG.temperature,
-        max_tokens: LLM_GENERATION_CONFIG.maxTokens
+        systemInstruction: { parts: [{ text: req.system }] },
+        contents: [{ role: 'user', parts: [{ text: req.user }] }],
+        generationConfig: {
+          temperature: LLM_GENERATION_CONFIG.temperature,
+          maxOutputTokens: LLM_GENERATION_CONFIG.maxTokens,
+          // Gemma and older models served by this API reject JSON mode.
+          ...(model.startsWith('gemini') ? { responseMimeType: 'application/json' } : {})
+        }
       })
-    })
-  } catch (err) {
-    if ((err as Error).name === 'AbortError') throw new Error(timeoutErrorMessage())
-    throw err
-  }
-  if (!response.ok) {
-    let message = `Groq API error: ${response.status} ${response.statusText}`
-    try {
-      const data = await response.json()
-      if (data.error?.message) message = data.error.message
-    } catch { /* keep default */ }
-    throw new Error(message)
-  }
+    }
+  )
+  if (!response.ok) throw await providerError(response, PROVIDERS.gemini.name)
   const data = await response.json()
-  const text = data.choices?.[0]?.message?.content
-  if (!text) throw new Error('No content generated by Groq AI')
+  const text = (data.candidates?.[0]?.content?.parts || []).map((p: any) => p.text ?? '').join('')
+  if (!text) throw new Error('Gemini returned an empty response.')
   return text
 }
 
-async function callOpenRouterAPI(prompt: string, model: string, apiKey: string): Promise<string> {
-  const url = `${PROVIDERS.openrouter.baseUrl}/chat/completions`
-  let response: Response
-  try {
-    response = await fetchWithTimeout(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-        'HTTP-Referer': 'https://github.com/jacksonkasi1/smartfill-extension',
-        'X-Title': 'SmartFill Extension'
-      },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: LLM_GENERATION_CONFIG.temperature,
-        max_tokens: LLM_GENERATION_CONFIG.maxTokens
-      })
-    })
-  } catch (err) {
-    if ((err as Error).name === 'AbortError') throw new Error(timeoutErrorMessage())
-    throw err
+/** Send one chat request to any supported provider. Runs in the background worker. */
+export async function completeChat(req: ChatRequest): Promise<string> {
+  if (!req.baseUrl) throw new Error('Set a base URL for this provider in Settings.')
+  if (!req.model) throw new Error('Choose a model in Settings.')
+  switch (PROVIDERS[req.provider].kind) {
+    case 'anthropic': return callAnthropic(req)
+    case 'gemini': return callGemini(req)
+    default: return callOpenAICompatible(req)
   }
-  if (!response.ok) {
-    let message = `OpenRouter API error: ${response.status} ${response.statusText}`
-    try {
-      const data = await response.json()
-      if (data.error?.message) message = data.error.message
-    } catch { /* keep default */ }
-    throw new Error(message)
-  }
-  const data = await response.json()
-  const text = data.choices?.[0]?.message?.content
-  if (!text) throw new Error('No content generated by OpenRouter AI')
-  return text
 }
+
+// ---------------------------------------------------------------------------
+// Model listing
+// ---------------------------------------------------------------------------
+
+/** Fetch the live model list. Falls back to the built-in suggestions when unsupported. */
+export async function listModels(req: Omit<ProviderRequest, 'model'>): Promise<string[]> {
+  const config = PROVIDERS[req.provider]
+  if (config.canListModels === false) return config.models
+  if (!req.baseUrl) throw new Error('Set a base URL first.')
+
+  let response: Response
+  if (config.kind === 'gemini') {
+    response = await fetchWithTimeout(`${req.baseUrl}/models?pageSize=200`, {
+      headers: { 'x-goog-api-key': req.apiKey }
+    }, 15_000)
+  } else if (config.kind === 'anthropic') {
+    response = await fetchWithTimeout(`${req.baseUrl}/models?limit=100`, {
+      headers: {
+        'x-api-key': req.apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      }
+    }, 15_000)
+  } else {
+    response = await fetchWithTimeout(`${req.baseUrl}/models`, { headers: authHeaders({ ...req, model: '' }) }, 15_000)
+  }
+  if (!response.ok) throw await providerError(response, config.name)
+
+  const data = await response.json()
+  let ids: string[]
+  if (config.kind === 'gemini') {
+    ids = (data.models || [])
+      .filter((m: any) => (m.supportedGenerationMethods || []).includes('generateContent'))
+      .map((m: any) => String(m.name).replace(/^models\//, ''))
+  } else {
+    // OpenAI shape is { data: [...] }; Together returns a bare array.
+    const list = Array.isArray(data) ? data : data.data || data.models || []
+    ids = list.map((m: any) => m.id || m.name).filter(Boolean)
+  }
+  // Hide embedding / audio / image models that cannot chat.
+  const chatOnly = ids.filter(id => !/embed|whisper|tts|dall-e|moderation|rerank|image|audio|transcribe|guard/i.test(id))
+  return Array.from(new Set(chatOnly)).sort((a, b) => a.localeCompare(b))
+}
+
+// ---------------------------------------------------------------------------
+// Form generation (content-script side)
+// ---------------------------------------------------------------------------
 
 /**
  * Options forwarded through the fill pipeline. We pass this as a
@@ -183,64 +254,43 @@ export interface GenerateFormDataOptions {
    * (a) only use sensitive values that came from Custom
    * Instructions, and (b) default consent fields to false. When
    * false (default), every detected field is filled.
-   *
-   * The parser also gates its sensitive / consent protection
-   * branches on this flag, so the same `safeFillingMode` value
-   * flows from the popup through `content.ts` and into both
-   * `buildPrompt` and `parseAIResponse`.
    */
   safeFillingMode?: boolean
+  /** Industry profile, region and page hints that steer the values. */
+  context?: PromptContext
+  /** Values for fields the AI leaves out, keyed by field name. */
+  fallback?: Record<string, unknown>
 }
 
 /**
- * Generate form data using the configured LLM provider. Returns both
- * the parsed fields and per-step timings so the caller can show a
- * useful performance log.
+ * Generate form data with the configured provider. The network call
+ * runs in the background service worker: it holds the host
+ * permissions, so provider CORS rules and page CSP never apply.
  */
 export async function generateFormData(
   fields: FormField[],
   customPrompt?: string,
   options: GenerateFormDataOptions = {}
 ): Promise<AIResult> {
-  // Keep the AI boundary canonical even when this public API is called
-  // without going through the content-script orchestration.
   fields = normalizeFormFields(fields).fields
-  const { provider, model, apiKey } = await getProviderSettings()
-
-  const isRecommended = PROVIDERS[provider].models.some(m => m.id === model)
-  const modelType: 'recommended' | 'custom' = isRecommended ? 'recommended' : 'custom'
-  const modelMetadata: ModelMetadata = {
-    provider: PROVIDERS[provider].name,
-    modelId: model,
-    modelType
-  }
-
-  // Default OFF — never default this to true.
   const safeFillingMode = options.safeFillingMode === true
 
-  // ---- Prompt build ----
   const t0 = performance.now()
-  const prompt = buildPrompt(fields, customPrompt, modelMetadata, { safeFillingMode })
+  const prompt = buildPrompt(fields, customPrompt, undefined, { safeFillingMode, context: options.context })
   const promptMs = performance.now() - t0
 
-  // ---- Provider call ----
   const t1 = performance.now()
-  let generatedText: string
-  switch (provider) {
-    case 'gemini': generatedText = await callGeminiAPI(prompt, model, apiKey); break
-    case 'groq': generatedText = await callGroqAPI(prompt, model, apiKey); break
-    case 'openrouter': generatedText = await callOpenRouterAPI(prompt, model, apiKey); break
-    default: throw new Error(`Unsupported provider: ${provider}`)
-  }
+  const response = await chrome.runtime.sendMessage({
+    action: MESSAGE_ACTIONS.AI.COMPLETE,
+    system: SYSTEM_PROMPT,
+    user: prompt
+  })
+  if (!response?.success) throw new Error(response?.error || 'AI request failed.')
   const apiMs = performance.now() - t1
 
-  // ---- Parse ----
   const t2 = performance.now()
-  const data = parseAIResponse(generatedText, fields, customPrompt, { safeFillingMode })
+  const data = parseAIResponse(response.text, fields, customPrompt, { safeFillingMode, fallback: options.fallback })
   const parseMs = performance.now() - t2
 
-  return {
-    data,
-    timings: { promptMs, apiMs, parseMs }
-  }
+  return { data, timings: { promptMs, apiMs, parseMs } }
 }

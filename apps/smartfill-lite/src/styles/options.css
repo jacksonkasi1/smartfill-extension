@@ -1,0 +1,82 @@
+body { min-height: 100vh; font-size: 14px; }
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 40px 16px 56px;
+}
+
+.brand { display: flex; align-items: center; gap: 14px; }
+.brand img { border-radius: 12px; box-shadow: 0 6px 16px rgba(5, 150, 105, 0.25); }
+.brand p { margin: 0; color: var(--muted); font-size: 13px; }
+.brand-name {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  background: linear-gradient(90deg, #047857 0%, #10b981 55%, #84cc16 120%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.settings { display: flex; flex-direction: column; gap: 16px; }
+.loading { color: var(--muted); }
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px;
+}
+.card.highlight { border-color: var(--primary); box-shadow: 0 0 0 4px var(--primary-soft), var(--shadow); }
+.card-head h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.card-head p { margin: 3px 0 0; color: var(--muted); font-size: 12.5px; }
+
+label { display: block; }
+label.toggle { display: flex; }
+.field-label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+.field-label a {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  color: var(--primary);
+  text-decoration: none;
+}
+.field-label a:hover { text-decoration: underline; }
+.label-meta { margin-left: auto; color: var(--faint); font-weight: 400; }
+
+.row { display: flex; align-items: center; gap: 8px; }
+.row input { flex: 1; min-width: 0; }
+.row button { flex: none; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 520px) { .grid-2 { grid-template-columns: 1fr; } }
+
+.options .segmented button { padding: 7px 0; font-size: 13px; }
+
+.note {
+  margin: 0;
+  padding: 11px 12px;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.note .inline-link { color: var(--primary); font-weight: 500; text-decoration: none; }
+
+.footer-row { justify-content: flex-start; }
+.saved { color: var(--success); font-size: 12.5px; font-weight: 500; opacity: 0; transition: opacity 0.2s; }
+.saved.on { opacity: 1; }
+.version { margin-left: auto; color: var(--faint); font-size: 12px; }
