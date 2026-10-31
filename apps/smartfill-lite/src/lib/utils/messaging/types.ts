@@ -115,7 +115,14 @@ export const MESSAGE_ACTIONS = {
   FORMS: {
     FILL: "fillForms",
     DETECT: "detectForms",
+    SCAN: "scanForms",
+    UNDO: "undoFill",
     PING: "ping"
+  },
+  AI: {
+    COMPLETE: "aiComplete",
+    MODELS: "aiModels",
+    TEST: "aiTest"
   },
   RECORDING: {
     START: "startRecording",

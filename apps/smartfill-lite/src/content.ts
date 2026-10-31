@@ -1,13 +1,30 @@
 // ** import types
 import type { PlasmoCSConfig } from "plasmo"
-import type { DetectResult, FillResult } from './types/extension'
+import type { AIFormData, FormField } from './types/extension'
 import type { RecordingSession, RecordingStep } from './types/recording'
+import type { FillMode, Settings } from '@/lib/settings'
+import type { ProfileId, Region } from '@/lib/mock'
 
 // ** import utils
-import { MessageListener, MessagingClient, WebsiteEvents, MESSAGE_ACTIONS } from "@/lib/utils/messaging"
+import { MessagingClient, WebsiteEvents, MESSAGE_ACTIONS } from "@/lib/utils/messaging"
 
 // ** import lib
-import { detectAllForms, fillForm, normalizeFormFields } from './lib'
+import { detectAllForms, fillForm, normalizeFormFields, FillSnapshot } from './lib'
+import { getSettings, isAIReady } from '@/lib/settings'
+import {
+  MockGenerator,
+  PROFILE_MAP,
+  REGIONS,
+  classifyField,
+  detectProfile,
+  detectRegion,
+  fieldHaystack,
+  generateMockData,
+  kindLabel,
+  newSeed,
+  readPageSignals
+} from '@/lib/mock'
+import { isConsentField, isSensitiveField } from '@/api/ai/sensitiveFields'
 
 // ** import apis
 import { generateFormData } from './api'
@@ -17,7 +34,7 @@ export const config: PlasmoCSConfig = {
 }
 
 // ---------------------------------------------------------------------------
-// Recording state (kept independent of the AI fill flow)
+// Recording state (kept independent of the fill flow)
 // ---------------------------------------------------------------------------
 let currentRecording: RecordingSession | null = null
 let isRecording = false
@@ -56,15 +73,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         case MESSAGE_ACTIONS.FORMS.PING:
           return { success: true, status: "ready" }
 
-        case MESSAGE_ACTIONS.FORMS.FILL: {
-          const result = await fillForms(message.prompt)
-          return {
-            success: result.success,
-            filled: result.filled,
-            formCount: result.filled,
-            errors: result.errors
-          }
-        }
+        case MESSAGE_ACTIONS.FORMS.SCAN:
+          return await scanPage()
+
+        case MESSAGE_ACTIONS.FORMS.FILL:
+          return await fillPage(message.seed, message.mode)
+
+        case MESSAGE_ACTIONS.FORMS.UNDO:
+          return undoFill()
 
         case MESSAGE_ACTIONS.RECORDING.START:
           return await startRecording()
@@ -98,80 +114,189 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 })
 
 // ---------------------------------------------------------------------------
-// Core fill pipeline: Detect -> Context -> AI -> Fill
+// Detection + context
 // ---------------------------------------------------------------------------
-async function fillForms(customPrompt?: string): Promise<FillResult> {
-  const totalStart = performance.now()
 
-  // 0) Read the Safe Filling Mode setting from chrome.storage.sync.
-  // Default OFF — never default this to true. Existing users with
-  // no stored setting must receive unrestricted filling.
-  let safeFillingMode = false
-  let debugMode = false
-  try {
-    const stored = await chrome.storage.sync.get(['safeFillingMode', 'debugMode'])
-    safeFillingMode = stored.safeFillingMode === true
-    debugMode = stored.debugMode === true
-  } catch (err) {
-    console.error('[SmartFill] Failed to read safeFillingMode setting:', err)
-  }
+/** Elements SmartFill wrote to, so "keep existing values" never protects our own output. */
+const filledBySmartFill = new WeakSet<Element>()
+let lastSnapshot: FillSnapshot | null = null
 
-  // 1) Detect
-  const detectStart = performance.now()
+async function collectFields(): Promise<FormField[]> {
   const detectResult = await detectAllForms()
-  const detectMs = performance.now() - detectStart
+  if (!detectResult.success || detectResult.forms.length === 0) return []
+  return normalizeFormFields(detectResult.forms.flatMap(f => f.fields)).fields
+}
 
-  if (!detectResult.success || detectResult.forms.length === 0) {
-    return { success: false, filled: 0, errors: ['No forms detected on this page'] }
-  }
-  const rawFields = detectResult.forms.flatMap(f => f.fields)
-  const normalized = normalizeFormFields(rawFields)
-  const allFields = normalized.fields
-  if (debugMode) {
-    console.debug('[SmartFill] extraction:', {
-      'Raw candidates': normalized.stats.rawCount,
-      'Normalized fields': normalized.stats.normalizedCount,
-      'Duplicates removed': normalized.stats.duplicatesRemoved,
-      'Non-form controls removed': normalized.stats.unusableRemoved,
-      duplicateGroups: normalized.stats.duplicateGroups
+interface FillContext {
+  profileId: ProfileId
+  autoDetected: boolean
+  region: Region
+}
+
+function resolveContext(settings: Settings, fields: FormField[]): FillContext {
+  const autoDetected = settings.profile === 'auto'
+  const profileId = autoDetected ? detectProfile(readPageSignals(fields)).id : settings.profile as ProfileId
+  const fieldText = fields.map(f => `${fieldHaystack(f)} ${(f.options || []).join(' ')}`).join(' | ')
+  const region = settings.region === 'auto'
+    ? detectRegion(location.hostname, navigator.language || 'en-US', fieldText)
+    : settings.region
+  return { profileId, autoDetected, region }
+}
+
+function fieldLabel(field: FormField): string {
+  const label = field.label && field.label !== 'Unnamed Field' ? field.label : ''
+  return (label || field.placeholder || field.name).replace(/\s+/g, ' ').trim().slice(0, 60)
+}
+
+async function scanPage() {
+  const settings = await getSettings()
+  const fields = await collectFields()
+  const context = resolveContext(settings, fields)
+  return {
+    success: true,
+    host: location.hostname,
+    profile: context.profileId,
+    autoDetected: context.autoDetected,
+    region: context.region,
+    fields: fields.map(field => {
+      const kind = classifyField(field)
+      return {
+        label: fieldLabel(field),
+        kind: kindLabel(kind),
+        required: field.required,
+        skipped: kind === 'skip' || (settings.safeFillingMode && isSensitiveField(field))
+      }
     })
   }
-  if (allFields.length === 0) {
-    return { success: false, filled: 0, errors: ['No fillable fields found'] }
+}
+
+function hasUserValue(field: FormField): boolean {
+  const el = field.element
+  if (filledBySmartFill.has(el)) return false
+  if (el instanceof HTMLSelectElement) return el.selectedIndex > 0
+  if (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')) return false
+  return 'value' in el && String(el.value).trim() !== ''
+}
+
+// ---------------------------------------------------------------------------
+// Core fill pipeline: Detect -> Context -> Mock (+ AI) -> Fill
+// ---------------------------------------------------------------------------
+async function fillPage(seed: number = newSeed(), modeOverride?: FillMode) {
+  const totalStart = performance.now()
+  const settings = await getSettings()
+  const mode: FillMode = modeOverride || settings.mode
+  const safeFillingMode = settings.safeFillingMode === true
+
+  const fields = await collectFields()
+  if (fields.length === 0) {
+    return { success: false, filled: 0, total: 0, errors: ['No form fields found on this page.'] }
   }
 
-  // 2) AI prepare + request + parse
-  const aiResult = await generateFormData(allFields, customPrompt, { safeFillingMode })
-  const { data: aiData, timings: aiTimings } = aiResult
+  const context = resolveContext(settings, fields)
+  const profile = PROFILE_MAP[context.profileId]
 
-  // 3) Fill
+  // Mock values are always generated: they are the whole answer in
+  // mock mode and the fallback for anything the AI leaves out.
+  const generator = new MockGenerator({ profile, region: context.region, seed })
+  const mock = generateMockData(fields, generator) as Record<string, any>
+  if (safeFillingMode) {
+    for (const field of fields) {
+      if (isSensitiveField(field)) mock[field.name] = null
+      else if (isConsentField(field)) mock[field.name] = false
+    }
+  }
+
+  let data: Record<string, any> = mock
+  let warning: string | undefined
+  let aiTimings: { promptMs: number, apiMs: number, parseMs: number } | undefined
+
+  if (mode === 'ai') {
+    if (!isAIReady(settings)) {
+      warning = 'AI is not set up yet, so mock data was used. Add an API key in Settings.'
+    } else {
+      try {
+        const ai = await generateFormData(fields, settings.instructions, {
+          safeFillingMode,
+          fallback: mock,
+          context: {
+            industry: `${profile.name} — ${profile.description}`,
+            region: REGIONS[context.region].promptHint,
+            persona: generator.summary(),
+            pageTitle: document.title,
+            host: location.hostname
+          }
+        })
+        aiTimings = ai.timings
+        data = mergeWithFallback(fields, ai.data, mock, safeFillingMode)
+      } catch (error) {
+        warning = `AI failed (${error instanceof Error ? error.message : 'unknown error'}). Filled with mock data instead.`
+      }
+    }
+  }
+
+  if (settings.keepExisting) {
+    for (const field of fields) {
+      if (hasUserValue(field)) data[field.name] = null
+    }
+  }
+
+  lastSnapshot = FillSnapshot.capture(fields)
   const fillStart = performance.now()
-  const fillResult = await fillForm(allFields, aiData)
+  const fillResult = await fillForm(fields, data as AIFormData)
   const fillMs = performance.now() - fillStart
-
-  // 4) Performance instrumentation (dev only)
-  const totalMs = performance.now() - totalStart
-  const failed = allFields.length - fillResult.filled
-  if (process.env.NODE_ENV !== 'production') {
-    const lines = [
-      '[SmartFill Performance]',
-      '',
-      `Fields detected: ${allFields.length}`,
-      `Safe Filling Mode: ${safeFillingMode ? 'ON' : 'OFF'}`,
-      `Detection: ${detectMs.toFixed(0)}ms`,
-      `Prompt build: ${aiTimings.promptMs.toFixed(0)}ms`,
-      `AI API: ${aiTimings.apiMs.toFixed(0)}ms`,
-      `Parsing: ${aiTimings.parseMs.toFixed(0)}ms`,
-      `Fill: ${fillMs.toFixed(0)}ms`,
-      `Total: ${totalMs.toFixed(0)}ms`,
-      '',
-      `Filled: ${fillResult.filled}`,
-      `Failed: ${failed}`
-    ]
-    console.log(lines.join('\n'))
+  for (const field of fields) {
+    if (data[field.name] !== null && data[field.name] !== undefined) filledBySmartFill.add(field.element)
   }
 
-  return fillResult
+  if (process.env.NODE_ENV !== 'production') {
+    console.log([
+      '[SmartFill Performance]',
+      `Mode: ${mode}${warning ? ' (fell back to mock)' : ''} · Profile: ${profile.name} · Region: ${context.region}`,
+      `Fields detected: ${fields.length}`,
+      aiTimings ? `AI: prompt ${aiTimings.promptMs.toFixed(0)}ms · API ${aiTimings.apiMs.toFixed(0)}ms · parse ${aiTimings.parseMs.toFixed(0)}ms` : '',
+      `Fill: ${fillMs.toFixed(0)}ms · Total: ${(performance.now() - totalStart).toFixed(0)}ms`,
+      `Filled: ${fillResult.filled}/${fields.length}`
+    ].filter(Boolean).join('\n'))
+  }
+
+  return {
+    success: fillResult.filled > 0,
+    filled: fillResult.filled,
+    total: fields.length,
+    mode,
+    profile: context.profileId,
+    region: context.region,
+    warning,
+    errors: fillResult.filled > 0 ? [] : ['No fields could be filled on this page.']
+  }
+}
+
+/**
+ * Use the AI value when it gave one, otherwise the mock value. An empty
+ * string from the parser in Safe Filling Mode is a deliberate blank and
+ * must not be replaced by a generated sensitive value.
+ */
+function mergeWithFallback(
+  fields: FormField[],
+  ai: AIFormData,
+  mock: Record<string, any>,
+  safeFillingMode: boolean
+): Record<string, any> {
+  const merged: Record<string, any> = {}
+  for (const field of fields) {
+    const value = (ai as Record<string, any>)[field.name]
+    const deliberateBlank = safeFillingMode && value === '' && isSensitiveField(field)
+    const missing = value === undefined || value === null || (value === '' && !deliberateBlank)
+    merged[field.name] = missing ? mock[field.name] : value
+  }
+  return merged
+}
+
+function undoFill() {
+  if (!lastSnapshot) return { success: false, restored: 0, error: 'Nothing to undo on this page.' }
+  const restored = lastSnapshot.restore()
+  lastSnapshot = null
+  return { success: true, restored }
 }
 
 // ---------------------------------------------------------------------------
