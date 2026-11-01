@@ -21,36 +21,54 @@ SmartFill: one-click form filler. Autofill any form with realistic test data for
 
 **Description:**
 
-> SmartFill fills web forms in one click — perfect for QA testing, demos, and
-> anyone tired of typing the same details.
->
-> ✦ MOCK DATA — OFFLINE, NO KEY NEEDED
-> One consistent, clearly fictional persona fills every field: names, emails,
-> phones, addresses, dates, dropdowns, radio buttons and checkboxes.
-> Industry-correct identifiers in valid formats: GSTIN, PAN, IFSC, Aadhaar,
-> NPI, AWB, HS codes, VIN, IBAN, policy and claim numbers and more.
->
-> ✦ 20 INDUSTRY PROFILES + AUTO-DETECT
-> Healthcare, CRM, Logistics, Government, Banking, Insurance, E-commerce, HR,
-> Education, Real Estate, Travel, Legal, Pharmacy, Manufacturing, SaaS,
-> Restaurant, Automotive, Telecom, Events and General. Auto-detect reads the
-> page and picks the right one. India, US and UK formats.
->
-> ✦ AI FILL WITH YOUR OWN KEY
-> OpenAI, Anthropic Claude, Google Gemini, DeepSeek, OpenRouter, xAI Grok,
-> Groq, Mistral, Together, Fireworks, Perplexity, Cerebras, Cohere, Qwen,
-> Moonshot, NVIDIA, SambaNova, Ollama, LM Studio or any OpenAI-compatible
-> endpoint. Models are fetched automatically, or type any model name. Add
-> instructions by typing or by voice.
->
-> ✦ BUILT FOR SPEED
-> Generate again for a new persona, Undo to restore the page, Alt+Shift+F to
-> fill without opening the popup, Safe Filling Mode to keep passwords, IDs and
-> consent boxes untouched.
->
-> ✦ PRIVATE BY DESIGN
-> No account, no SmartFill server. Settings and keys stay in your browser.
-> Mock data never leaves your device.
+Paste this as plain text. It deliberately names **no AI or speech
+providers** and has no long lists: 1.2.0 was rejected for "excessive
+keywords" (Spam and Placement, ref. Yellow Argon) because the old text
+listed 20+ provider names. Keep provider names in the README, not here.
+
+```
+SmartFill fills web forms for you in one click. It is made for developers,
+testers and anyone who is tired of typing the same details again and again.
+
+HOW IT WORKS
+Open a page with a form, click the SmartFill icon and press Fill form.
+Text boxes, dropdowns, radio buttons, checkboxes and dates are all filled.
+Press Generate again for new values, or Undo to put the page back the way
+it was.
+
+REALISTIC TEST DATA, NO SETUP
+SmartFill makes up one believable, clearly fake person for each fill, so
+the name, email, phone and address all match. It reads the label you see
+on the page, so an amount field gets an amount and a date field gets a
+date in the same format the page uses. Business and ID numbers follow
+real formats for India, the US and the UK. This works offline and needs
+no account.
+
+INDUSTRY PROFILES
+Choose from 20 industry profiles, such as healthcare, banking, logistics
+and e-commerce, or leave it on Auto and SmartFill picks one from the page.
+
+OPTIONAL AI FILL
+Connect the AI service you already use with your own API key, and
+SmartFill asks it for values that suit the form. You can describe the
+person you want, by typing or by voice. If the AI skips a field, test data
+fills the gap.
+
+YOUR LOGIN DETAILS
+Set one password for every sign-up form, use your own email address with
+a new alias each time, or use a free temporary inbox and open it straight
+from the popup to read the verification email.
+
+HANDY EXTRAS
+- Alt+Shift+F fills the page without opening the popup
+- Keep my values only fills empty fields
+- Safe Filling Mode leaves passwords, ID numbers and consent boxes alone
+
+PRIVATE BY DESIGN
+There is no SmartFill server and no tracking. Settings and keys stay in
+your browser. Test data never leaves your computer. AI and voice requests
+go only to the service you choose, and only when you ask.
+```
 
 ## Single purpose
 
@@ -91,7 +109,7 @@ Privacy policy URL: use the website's `/privacy` page (apps/website).
 
 ## Assets checklist
 
-- [x] Icon 128×128 — `store/store-icon-128.png` (emerald logo, `assets/icon.png` is the 1024 source)
+- [x] Icon 128×128 — `store/store-icon-128.png` (blue logo, `assets/icon.png` is the 1024 source)
 - [x] Screenshots 1280×800 — `store/screenshot-1..4.png`:
   1. Popup over a filled hospital registration form (Mock data, Auto-detect)
   2. AI fill with instructions and the provider footer
