@@ -1,14 +1,16 @@
 // ** import core packages
 import { useEffect, useRef, useState } from "react"
 
-type SpeechCtor = new () => any
+// ** import types
+import type { VoicePlan } from "@/lib/settings"
 
-/** OpenAI-compatible `/audio/transcriptions` endpoint used when Web Speech is unavailable. */
-export interface Transcriber {
-  url: string
-  apiKey: string
-  model: string
-}
+// ** import apis
+import { transcribe } from "@/api/voice/transcribe"
+
+// ** import constants
+import { VOICE_PROVIDERS } from "@/api/voice/constants"
+
+type SpeechCtor = new () => any
 
 function speechCtor(): SpeechCtor | undefined {
   if (typeof window === 'undefined') return undefined
@@ -32,21 +34,23 @@ const MESSAGES: Record<string, string> = {
   'not-allowed': 'Microphone access is blocked.',
   'service-not-allowed': 'Microphone access is blocked.',
   'audio-capture': 'No microphone was found.',
-  'no-transcriber': 'This browser blocks the built-in speech service (Brave does). Save a Groq or OpenAI key under AI provider to use Whisper instead, or use Chrome or Edge.',
-  'transcription-failed': 'Could not transcribe the recording. Check your Groq/OpenAI key.'
+  'no-transcriber': 'This browser blocks the built-in speech service (Brave does). Pick a speech-to-text service under Voice input in Settings, or use Chrome or Edge.',
+  'no-key': 'The chosen voice service has no API key yet. Add it under Voice input in Settings.'
 }
 
 /**
- * Dictation. Uses the Web Speech API where it works and falls back to
- * recording audio and sending it to Whisper (Groq or OpenAI) where it
- * does not. Extension popups cannot show the microphone permission
+ * Dictation. Depending on the plan it uses the Web Speech API, a
+ * speech-to-text service (Groq, OpenAI, ElevenLabs, Deepgram, …), or
+ * the browser first with the service as fallback. Extension popups cannot show the microphone permission
  * prompt, so a `not-allowed` error sends the user to the options page
  * to grant it once for the extension origin.
  */
-export function useSpeech(onText: (text: string) => void, transcriber?: Transcriber) {
+export function useSpeech(onText: (text: string) => void, plan: VoicePlan = { mode: 'auto' }) {
   const [listening, setListening] = useState(false)
   const [transcribing, setTranscribing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [detail, setDetail] = useState('')
+  const target = plan.target
   const recognition = useRef<any>(null)
   const recorder = useRef<MediaRecorder | null>(null)
   const callback = useRef(onText)
@@ -58,7 +62,7 @@ export function useSpeech(onText: (text: string) => void, transcriber?: Transcri
   }, [])
 
   const canRecord = typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia) && typeof MediaRecorder !== 'undefined'
-  const supported = Boolean(speechCtor()) || (canRecord && Boolean(transcriber))
+  const supported = plan.mode === 'cloud' ? canRecord : Boolean(speechCtor()) || (canRecord && Boolean(target))
 
   function startWebSpeech() {
     const Ctor = speechCtor()
@@ -77,7 +81,7 @@ export function useSpeech(onText: (text: string) => void, transcriber?: Transcri
       if (event.error === 'no-speech' || event.error === 'aborted') return
       if (event.error === 'network') {
         markWebSpeechBroken()
-        if (transcriber && canRecord) {
+        if (plan.mode === 'auto' && target && canRecord) {
           startRecording()
           return
         }
@@ -93,8 +97,8 @@ export function useSpeech(onText: (text: string) => void, transcriber?: Transcri
   }
 
   async function startRecording() {
-    if (!transcriber || !canRecord) {
-      setError('no-transcriber')
+    if (!target || !canRecord) {
+      setError(plan.mode === 'cloud' ? 'no-key' : 'no-transcriber')
       return
     }
     let stream: MediaStream
@@ -113,9 +117,10 @@ export function useSpeech(onText: (text: string) => void, transcriber?: Transcri
       if (chunks.length === 0) return
       setTranscribing(true)
       try {
-        const text = await transcribe(new Blob(chunks, { type: rec.mimeType || 'audio/webm' }), transcriber)
+        const text = await transcribe(new Blob(chunks, { type: rec.mimeType || 'audio/webm' }), target)
         if (text) callback.current(text)
-      } catch {
+      } catch (e) {
+        setDetail(e instanceof Error ? e.message : 'Transcription failed.')
         setError('transcription-failed')
       } finally {
         setTranscribing(false)
@@ -133,24 +138,13 @@ export function useSpeech(onText: (text: string) => void, transcriber?: Transcri
       return
     }
     setError(null)
-    if (webSpeechBroken() || !speechCtor()) startRecording()
+    if (plan.mode === 'cloud') startRecording()
+    else if (plan.mode === 'auto' && (webSpeechBroken() || !speechCtor())) startRecording()
     else startWebSpeech()
   }
 
-  const message = error ? MESSAGES[error] ?? `Voice input stopped (${error}).` : null
+  const message = error === 'transcription-failed'
+    ? `${target ? VOICE_PROVIDERS[target.provider].name : 'Voice'}: ${detail}`
+    : error ? MESSAGES[error] ?? `Voice input stopped (${error}).` : null
   return { supported, listening, transcribing, error, message, toggle }
-}
-
-async function transcribe(audio: Blob, target: Transcriber): Promise<string> {
-  const form = new FormData()
-  form.append('file', audio, 'speech.webm')
-  form.append('model', target.model)
-  const res = await fetch(target.url, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${target.apiKey}` },
-    body: form
-  })
-  if (!res.ok) throw new Error(`Transcription failed (${res.status})`)
-  const data = await res.json()
-  return String(data.text || '').trim()
 }

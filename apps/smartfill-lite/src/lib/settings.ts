@@ -3,12 +3,24 @@ import type { LLMProvider } from '@/api/ai/constants'
 import type { ProfileId } from '@/lib/mock/profiles'
 import type { Region } from '@/lib/mock/regions'
 import type { IdentityPrefs } from '@/lib/mock/identity'
+import type { VoiceProviderId } from '@/api/voice/constants'
+import type { VoiceTarget } from '@/api/voice/transcribe'
 
 // ** import constants
 import { DEFAULT_PROVIDER, PROVIDERS, isProvider } from '@/api/ai/constants'
 import { DEFAULT_IDENTITY } from '@/lib/mock/identity'
+import { VOICE_AUTO_ORDER, VOICE_PROVIDERS, VOICE_PROVIDER_IDS } from '@/api/voice/constants'
 
 export type FillMode = 'mock' | 'ai'
+
+export interface VoiceSettings {
+  /** 'auto': browser speech, then the first service with a key. 'browser': never upload audio. */
+  provider: VoiceProviderId | 'auto' | 'browser'
+  apiKeys: Partial<Record<VoiceProviderId, string>>
+  models: Partial<Record<VoiceProviderId, string>>
+  /** Only for the custom OpenAI-compatible server. */
+  customBaseUrl: string
+}
 
 export interface Settings {
   mode: FillMode
@@ -26,6 +38,7 @@ export interface Settings {
   safeFillingMode: boolean
   /** Fixed password and email strategy used by both mock and AI fills. */
   identity: IdentityPrefs
+  voice: VoiceSettings
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -39,7 +52,8 @@ export const DEFAULT_SETTINGS: Settings = {
   baseUrls: {},
   keepExisting: false,
   safeFillingMode: false,
-  identity: DEFAULT_IDENTITY
+  identity: DEFAULT_IDENTITY,
+  voice: { provider: 'auto', apiKeys: {}, models: {}, customBaseUrl: '' }
 }
 
 const STORAGE_KEY = 'settings'
@@ -60,7 +74,12 @@ export async function getSettings(): Promise<Settings> {
 
 /** Fill in fields added after the settings were first saved. */
 function withDefaults(stored: Partial<Settings>): Settings {
-  return { ...DEFAULT_SETTINGS, ...stored, identity: { ...DEFAULT_IDENTITY, ...stored.identity } }
+  return {
+    ...DEFAULT_SETTINGS,
+    ...stored,
+    identity: { ...DEFAULT_IDENTITY, ...stored.identity },
+    voice: { ...DEFAULT_SETTINGS.voice, ...stored.voice }
+  }
 }
 
 export async function saveSettings(patch: Partial<Settings>): Promise<Settings> {
@@ -105,16 +124,39 @@ export function isAIReady(settings: Settings): boolean {
   return Boolean(activeModel(settings))
 }
 
-/**
- * Whisper endpoint for voice input in browsers without a speech
- * service (Brave). Groq first: its Whisper tier is free and fast.
- */
-export function transcriberFor(settings: Settings): { url: string, apiKey: string, model: string } | undefined {
-  const groq = settings.apiKeys.groq?.trim()
-  if (groq) return { url: 'https://api.groq.com/openai/v1/audio/transcriptions', apiKey: groq, model: 'whisper-large-v3-turbo' }
-  const openai = settings.apiKeys.openai?.trim()
-  if (openai) return { url: 'https://api.openai.com/v1/audio/transcriptions', apiKey: openai, model: 'whisper-1' }
-  return undefined
+/** Key for a voice service: its own, else the matching AI provider's key. */
+export function voiceKey(settings: Settings, provider: VoiceProviderId): string {
+  const own = settings.voice.apiKeys[provider]?.trim()
+  if (own) return own
+  const shared = VOICE_PROVIDERS[provider].sharesKeyWith
+  return shared ? settings.apiKeys[shared]?.trim() || '' : ''
+}
+
+function voiceTarget(settings: Settings, provider: VoiceProviderId): VoiceTarget | undefined {
+  const config = VOICE_PROVIDERS[provider]
+  const apiKey = voiceKey(settings, provider)
+  const baseUrl = (provider === 'custom' ? settings.voice.customBaseUrl.trim() : config.baseUrl).replace(/\/+$/, '')
+  if (!baseUrl || (provider !== 'custom' && !apiKey)) return undefined
+  return { provider, apiKey, baseUrl, model: settings.voice.models[provider]?.trim() || config.defaultModel }
+}
+
+export interface VoicePlan {
+  /** 'cloud' records straight away; 'auto' tries browser speech first; 'browser' never uploads. */
+  mode: 'auto' | 'browser' | 'cloud'
+  target?: VoiceTarget
+}
+
+export function resolveVoice(settings: Settings): VoicePlan {
+  const choice = settings.voice.provider
+  if (choice === 'browser') return { mode: 'browser' }
+  if (choice !== 'auto') return { mode: 'cloud', target: voiceTarget(settings, choice) }
+  // Services the user gave a voice key to win, then shared AI keys.
+  const explicit = VOICE_PROVIDER_IDS.filter(id => settings.voice.apiKeys[id]?.trim())
+  for (const id of [...explicit, ...VOICE_AUTO_ORDER]) {
+    const target = voiceTarget(settings, id)
+    if (target) return { mode: 'auto', target }
+  }
+  return { mode: 'auto' }
 }
 
 async function migrateLegacySettings(): Promise<Settings> {

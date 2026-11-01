@@ -1,4 +1,6 @@
-# Chrome Web Store — SmartFill 1.1.0
+# Chrome Web Store — SmartFill 1.2.0
+
+Published listing: https://chromewebstore.google.com/detail/smartfill-lite-ai-form-fi/gcfnhnhofhponjlaanblhnbakpbmdmol
 
 Upload `build/chrome-mv3-prod.zip` (created by `bun run package`) as a new
 version of the existing item in the Developer Dashboard.
@@ -76,6 +78,12 @@ either locally or using an AI provider the user configures.
   sent. *Mock data* mode sends nothing anywhere.
 - **Authentication information:** the user's own AI API key is stored in
   `chrome.storage.local` on their device and sent only to that provider.
+- **Audio (voice input):** only when the user presses the mic. By default
+  the browser's own speech recognition is used. If the user picks a
+  speech-to-text service (Groq, OpenAI, ElevenLabs, Deepgram, AssemblyAI,
+  Gemini, Mistral, Together, Fireworks or their own server), the recorded
+  clip is sent directly to that service with the user's key, solely to
+  transcribe it. Nothing is stored or sent elsewhere.
 - Tick: *not sold to third parties*, *not used for unrelated purposes*,
   *not used for creditworthiness or lending*.
 

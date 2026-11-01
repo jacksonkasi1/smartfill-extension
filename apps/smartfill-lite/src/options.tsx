@@ -8,7 +8,7 @@ import type { StatusState } from "@/components/Status"
 import type { EmailMode, IdentityPrefs } from "@/lib/mock"
 
 // ** import lib
-import { activeBaseUrl, activeModel, getSettings, resetSettings, saveSettings, transcriberFor } from "@/lib/settings"
+import { activeBaseUrl, activeModel, getSettings, resetSettings, resolveVoice, saveSettings, voiceKey } from "@/lib/settings"
 import { INBOX_PROVIDERS, PROFILES, REGIONS, parseEmails } from "@/lib/mock"
 import { IDLE, Status, errorText } from "@/components/Status"
 import { useSpeech } from "@/components/useSpeech"
@@ -16,6 +16,7 @@ import { ExternalIcon, MicIcon, RefreshIcon } from "@/components/icons"
 
 // ** import constants
 import { PROVIDERS, PROVIDER_GROUP_LABELS, PROVIDER_IDS } from "@/api/ai/constants"
+import { VOICE_PROVIDERS, VOICE_PROVIDER_IDS } from "@/api/voice/constants"
 import { MESSAGE_ACTIONS } from "@/lib/utils/messaging/types"
 
 // ** import styles
@@ -297,29 +298,111 @@ function IdentityCard({ settings, update }: { settings: Settings, update: (patch
   )
 }
 
-function MicPermission() {
-  const [state, setState] = useState<StatusState>({ tone: 'idle', message: '' })
+function VoiceCard({ settings, update, highlight }: { settings: Settings, update: (patch: Partial<Settings>) => void, highlight: boolean }) {
+  const voice = settings.voice
+  const choice = voice.provider
+  const service = choice === 'auto' || choice === 'browser' ? undefined : choice
+  const config = service ? VOICE_PROVIDERS[service] : undefined
+  const [showKey, setShowKey] = useState(false)
+  const [mic, setMic] = useState<StatusState>(IDLE)
+  const plan = resolveVoice(settings)
 
-  async function allow() {
+  const setVoice = (patch: Partial<Settings['voice']>) => update({ voice: { ...voice, ...patch } })
+  const setFor = (key: 'apiKeys' | 'models', value: string) => {
+    if (service) setVoice({ [key]: { ...voice[key], [service]: value } })
+  }
+
+  async function allowMic() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       stream.getTracks().forEach(t => t.stop())
-      setState({ tone: 'success', message: 'Microphone enabled. You can close this tab and use voice input in the popup.' })
+      setMic({ tone: 'success', message: 'Microphone enabled. The mic in the popup now works too.' })
     } catch {
-      setState({ tone: 'error', message: 'Microphone was blocked. Allow it from the address bar and try again.' })
+      setMic({ tone: 'error', message: 'Microphone was blocked. Allow it from the address bar and try again.' })
     }
   }
 
+  const sharedKey = service && !voice.apiKeys[service]?.trim() && config?.sharesKeyWith ? voiceKey(settings, service) : ''
+  const autoNote = plan.target
+    ? `Uses the browser’s free speech recognition, and ${VOICE_PROVIDERS[plan.target.provider].name} where it is unavailable (e.g. Brave).`
+    : 'Uses the browser’s free speech recognition. Brave has none: pick a service below or add a Groq/OpenAI key under AI provider.'
+
   return (
-    <section className="card highlight">
+    <section className={`card${highlight ? ' highlight' : ''}`} id="voice">
       <div className="card-head">
-        <h2>Enable voice input</h2>
-        <p>Chrome asks for microphone access once. After that, the mic in the popup works everywhere.</p>
+        <h2>Voice input</h2>
+        <p>Dictate AI instructions with the mic. Pick a speech-to-text service if your browser has no built-in one.</p>
       </div>
+
+      <label>
+        <span className="field-label">Speech-to-text</span>
+        <select value={choice} onChange={e => setVoice({ provider: e.target.value as Settings['voice']['provider'] })}>
+          <option value="auto">Auto · browser, then a service you have a key for</option>
+          <option value="browser">Browser only · free, audio never leaves Chrome</option>
+          <optgroup label="Services">
+            {VOICE_PROVIDER_IDS.map(id => <option key={id} value={id}>{VOICE_PROVIDERS[id].name}</option>)}
+          </optgroup>
+        </select>
+        <p className="hint">{config ? config.note : choice === 'auto' ? autoNote : 'Chrome and Edge only. Brave and some other browsers do not support it.'}</p>
+      </label>
+
+      {service && config && (
+        <>
+          {service === 'custom' && (
+            <label>
+              <span className="field-label">Base URL <span className="label-meta">ends in /v1</span></span>
+              <input
+                type="url"
+                value={voice.customBaseUrl}
+                onChange={e => setVoice({ customBaseUrl: e.target.value })}
+                placeholder="http://localhost:8000/v1"
+                spellCheck={false}
+              />
+            </label>
+          )}
+          <label>
+            <span className="field-label">
+              API key{service === 'custom' && ' (optional)'}
+              {config.keyUrl && (
+                <a href={config.keyUrl} target="_blank" rel="noreferrer">
+                  Get a key <ExternalIcon size={11} />
+                </a>
+              )}
+            </span>
+            <div className="row">
+              <input
+                type={showKey ? 'text' : 'password'}
+                value={voice.apiKeys[service] ?? ''}
+                onChange={e => setFor('apiKeys', e.target.value.trim())}
+                placeholder={sharedKey ? `Using your ${PROVIDERS[config.sharesKeyWith!].name} key from AI provider` : config.keyHint || 'Paste your API key'}
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <button type="button" onClick={() => setShowKey(!showKey)}>{showKey ? 'Hide' : 'Show'}</button>
+            </div>
+          </label>
+          <label>
+            <span className="field-label">Model <span className="label-meta">or type any model ID</span></span>
+            <input
+              type="text"
+              list="voice-models"
+              value={voice.models[service] ?? ''}
+              onChange={e => setFor('models', e.target.value)}
+              placeholder={`${config.defaultModel} (default)`}
+              spellCheck={false}
+            />
+            <datalist id="voice-models">
+              {config.models.map(m => <option key={m} value={m} />)}
+            </datalist>
+          </label>
+        </>
+      )}
+
       <div className="row">
-        <button type="button" className="primary" onClick={allow}><MicIcon size={14} /> Allow microphone</button>
+        <button type="button" onClick={allowMic}><MicIcon size={14} /> Allow microphone</button>
+        <span className="hint mic-hint">Needed once, then the popup mic works on every site.</span>
       </div>
-      <Status status={state} />
+      <Status status={mic} />
     </section>
   )
 }
@@ -328,7 +411,7 @@ function Options() {
   const [settings, setSettings] = useState<Settings>()
   const [saved, setSaved] = useState(false)
   const savedTimer = useRef<number>()
-  const showMic = location.hash === '#mic'
+  const focusVoice = location.hash === '#mic' || location.hash === '#voice'
 
   const speech = useSpeech(text => {
     setSettings(current => {
@@ -337,7 +420,7 @@ function Options() {
       saveSettings({ instructions })
       return { ...current, instructions }
     })
-  }, settings ? transcriberFor(settings) : undefined)
+  }, settings ? resolveVoice(settings) : undefined)
 
   useEffect(() => {
     getSettings().then(setSettings)
@@ -363,7 +446,7 @@ function Options() {
 
   return (
     <div className="settings">
-      {showMic && <MicPermission />}
+      {focusVoice && <VoiceCard settings={settings} update={update} highlight />}
 
       <ProviderCard settings={settings} update={update} />
 
@@ -417,8 +500,10 @@ function Options() {
           )}
         </div>
         {speech.transcribing && <Status status={{ tone: 'loading', message: 'Transcribing…' }} />}
-        {speech.message && <Status status={{ tone: 'warning', message: speech.error === 'not-allowed' ? `${speech.message} Use “Allow microphone” below.` : speech.message }} />}
+        {speech.message && <Status status={{ tone: 'warning', message: speech.error === 'not-allowed' ? `${speech.message} Use “Allow microphone” under Voice input.` : speech.message }} />}
       </section>
+
+      {!focusVoice && <VoiceCard settings={settings} update={update} highlight={false} />}
 
       <section className="card">
         <div className="card-head">
@@ -446,12 +531,10 @@ function Options() {
         </p>
       </section>
 
-      {!showMic && <MicPermission />}
-
       <p className="note">
         <strong>Privacy.</strong> Settings and API keys stay in this browser profile’s local extension storage and are never synced.
         Mock data is generated on your device. AI fill sends field labels, options and your instructions — never values
-        already typed on the page — directly to the provider you choose.
+        already typed on the page — directly to the provider you choose. Voice clips go only to the speech-to-text service you pick.
       </p>
 
       <div className="row footer-row">

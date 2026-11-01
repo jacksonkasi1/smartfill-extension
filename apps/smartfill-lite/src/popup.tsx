@@ -10,7 +10,7 @@ import type { StatusState } from "@/components/Status"
 import { isRestrictedUrl, sendToTab } from "@/lib/utils/tabs"
 
 // ** import lib
-import { activeModel, getSettings, isAIReady, saveSettings, transcriberFor } from "@/lib/settings"
+import { activeModel, getSettings, isAIReady, resolveVoice, saveSettings } from "@/lib/settings"
 import { PROFILES, PROFILE_MAP, REGIONS, newSeed } from "@/lib/mock"
 import { IDLE, Status, errorText } from "@/components/Status"
 import { useSpeech } from "@/components/useSpeech"
@@ -204,7 +204,7 @@ function Popup() {
     if (!settings) return
     const instructions = [settings.instructions.trim(), text].filter(Boolean).join(' ')
     update({ instructions })
-  }, settings ? transcriberFor(settings) : undefined)
+  }, settings ? resolveVoice(settings) : undefined)
 
   useEffect(() => {
     let cancelled = false
@@ -229,10 +229,12 @@ function Popup() {
   useEffect(() => {
     if (speech.error === 'not-allowed' || speech.error === 'service-not-allowed') {
       setStatus({ tone: 'warning', message: 'Microphone access is needed for voice input.' })
-      setStatusAction({ label: 'Allow', onClick: () => openOptions('#mic') })
+      setStatusAction({ label: 'Allow', onClick: () => openOptions('#voice') })
     } else if (speech.message) {
       setStatus({ tone: 'warning', message: speech.message })
-      if (speech.error === 'no-transcriber') setStatusAction({ label: 'Settings', onClick: () => openOptions() })
+      if (speech.error === 'no-transcriber' || speech.error === 'no-key') {
+        setStatusAction({ label: 'Set up voice', onClick: () => openOptions('#voice') })
+      }
     }
   }, [speech.error])
 

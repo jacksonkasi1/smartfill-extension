@@ -88,3 +88,4 @@ label.toggle { display: flex; }
   background: var(--surface);
   font-size: 11.5px;
 }
+.mic-hint { margin: 0; }
