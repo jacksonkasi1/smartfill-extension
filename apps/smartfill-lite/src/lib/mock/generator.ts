@@ -3,16 +3,20 @@ import type { AIFormData, FormField } from '@/types/extension'
 import type { FieldKind } from './fieldKinds'
 import type { Profile } from './profiles'
 import type { CityRecord, Region, RegionData } from './regions'
+import type { ChosenEmail, IdentityPrefs } from './identity'
 
 // ** import lib
 import { Random } from './random'
 import { classifyField, fieldHaystack } from './fieldKinds'
 import { REGIONS } from './regions'
+import { chooseEmail } from './identity'
 
 export interface MockOptions {
   profile: Profile
   region: Region
   seed?: number
+  /** Pinned password / email choices from settings. */
+  identity?: IdentityPrefs
 }
 
 export interface Persona {
@@ -140,19 +144,42 @@ function isoDate(d: Date): string {
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
 }
 
-/** Native date inputs need ISO; free-text date fields follow the region. */
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/**
+ * Date pattern a text field expects, read from the value a date picker
+ * already shows ("01-Nov-2026") or from the placeholder ("DD/MM/YYYY").
+ */
+function datePattern(field: FormField, region: RegionData): string {
+  const current = String((field.element as HTMLInputElement)?.value ?? field.value ?? '').trim()
+  let m = current.match(/^\d{1,2}([-/. ])[A-Za-z]{3}\1\d{4}$/)
+  if (m) return `dd${m[1]}MMM${m[1]}yyyy`
+  m = current.match(/^[A-Za-z]{3} \d{1,2}, \d{4}$/)
+  if (m) return 'MMM d, yyyy'
+  m = current.match(/^\d{4}([-/.])\d{2}\1\d{2}$/)
+  if (m) return `yyyy${m[1]}mm${m[1]}dd`
+  m = current.match(/^(\d{2})([-/.])(\d{2})\2\d{4}$/)
+  if (m) {
+    const mdy = Number(m[3]) > 12 || (Number(m[1]) <= 12 && region.dateOrder === 'mdy')
+    return mdy ? `mm${m[2]}dd${m[2]}yyyy` : `dd${m[2]}mm${m[2]}yyyy`
+  }
+  const placeholder = (field.placeholder || '').toLowerCase()
+  const fromPlaceholder = placeholder.match(/(dd|mm|yyyy)([-/. ])(mmm|dd|mm)\2(yyyy|dd|yy)/)
+  if (fromPlaceholder) return fromPlaceholder[0].replace('mmm', 'MMM')
+  return region.dateOrder === 'mdy' ? 'mm/dd/yyyy' : 'dd/mm/yyyy'
+}
+
+/** Native date inputs need ISO; text fields copy the format the page already uses. */
 function formatDate(d: Date, field: FormField, region: RegionData): string {
   if (field.type === 'date') return isoDate(d)
   if (field.type === 'datetime-local') return `${isoDate(d)}T10:30`
-  const placeholder = (field.placeholder || '').toLowerCase()
-  if (/yyyy-mm-dd/.test(placeholder)) return isoDate(d)
-  const dd = pad(d.getUTCDate())
-  const mm = pad(d.getUTCMonth() + 1)
-  const yyyy = d.getUTCFullYear()
-  if (/mm.dd/.test(placeholder) || (region.dateOrder === 'mdy' && !/dd.mm/.test(placeholder))) {
-    return `${mm}/${dd}/${yyyy}`
-  }
-  return `${dd}/${mm}/${yyyy}`
+  return datePattern(field, region)
+    .replace('yyyy', String(d.getUTCFullYear()))
+    .replace('yy', String(d.getUTCFullYear()).slice(2))
+    .replace('MMM', MONTHS[d.getUTCMonth()])
+    .replace('mm', pad(d.getUTCMonth() + 1))
+    .replace('dd', pad(d.getUTCDate()))
+    .replace(/\bd\b/, String(d.getUTCDate()))
 }
 
 function daysFromNow(days: number): Date {
@@ -224,6 +251,8 @@ export class MockGenerator {
   readonly persona: Persona
   readonly region: RegionData
   readonly profile: Profile
+  /** Email picked from the user's list or a disposable inbox, if any. */
+  readonly chosenEmail?: ChosenEmail
   private cache = new Map<FieldKind, string>()
 
   constructor(options: MockOptions) {
@@ -231,7 +260,15 @@ export class MockGenerator {
     this.profile = options.profile
     this.region = REGIONS[options.region]
     this.persona = createPersona(this.rng, this.profile, this.region)
+
+    const identity = options.identity
+    if (identity?.password.trim()) this.persona.password = identity.password
+    this.chosenEmail = chooseEmail(this.rng, identity, `${slug(this.persona.firstName)}.${slug(this.persona.lastName)}`)
+    if (this.chosenEmail) this.persona.email = this.chosenEmail.email
   }
+
+  /** True when an email/password came from settings and must not be rewritten (by AI or "work email" logic). */
+  get pinnedEmail(): boolean { return Boolean(this.chosenEmail) }
 
   /** Text value for a kind. Stable within one generator so related fields agree. */
   textFor(kind: FieldKind, field: FormField): string | null {
@@ -261,7 +298,7 @@ export class MockGenerator {
       case 'username': return p.username
       case 'email':
       case 'confirmEmail':
-        return /work|business|office|company|official/.test(haystack)
+        return !this.pinnedEmail && /work|business|office|company|official/.test(haystack)
           ? `${p.email.split('@')[0].replace(/\d+$/, '')}@${p.companyDomain}`
           : p.email
       case 'password':
@@ -373,12 +410,23 @@ export class MockGenerator {
         return vin
       }
       case 'engineNumber': return `${rng.letters(2)}${rng.digits(2)}${rng.letters(1)}${rng.digits(6, true)}`
+      case 'vehicleName': return /truck|lorry|trailer|fleet/.test(haystack) || profile.id === 'logistics' ? rng.pick(TRUCKS) : rng.pick(CARS)
+      case 'vehicleType': return rng.pick(['Box Truck', 'Tail Lift', 'Flatbed', 'Reefer', 'Curtain Sider', 'Tipper'])
+      case 'tonnage': return `${rng.pick([1, 3, 5, 10, 16, 25])} Ton`
+      case 'documentNumber': return `${docPrefix(haystack)}-${new Date().getFullYear()}-${rng.digits(5, true)}`
+      case 'percent': return (rng.int(45, 145) / 10).toFixed(1)
+      case 'tenure': return String(rng.pick([12, 24, 36, 48, 60]))
       case 'dimensions': return `${rng.int(20, 60)} x ${rng.int(15, 45)} x ${rng.int(10, 40)} cm`
       case 'invoiceNumber': return `INV-${new Date().getFullYear()}-${rng.digits(5, true)}`
       case 'orderNumber': return profile.id === 'manufacturing' ? profile.reference(rng) : `ORD-${rng.digits(8, true)}`
       case 'sku': return `${rng.letters(3)}-${rng.digits(4, true)}-${rng.letters(1)}`
       case 'quantity': return clampNumber(rng.int(1, profile.id === 'manufacturing' ? 500 : 10), field)
-      case 'amount': return clampNumber(roundAmount(rng.int(...profile.amount)), field)
+      case 'amount': {
+        const scale = { in: 1, us: 0.015, uk: 0.012 }[region.id]
+        if (/down ?pay|advance|deposit/.test(haystack)) return clampNumber(roundAmount(rng.int(150000, 900000) * scale), field)
+        if (/month|\bemi\b|instal/.test(haystack)) return clampNumber(roundAmount(rng.int(12000, 85000) * scale), field)
+        return clampNumber(roundAmount(rng.int(...profile.amount)), field)
+      }
       case 'currency': return region.currency
       case 'coupon': return rng.pick(['WELCOME10', 'FESTIVE20', 'FIRSTORDER'])
       case 'licenseNumber': return `${rng.letters(2)}/${rng.digits(5, true)}/${new Date().getFullYear()}`
@@ -416,6 +464,9 @@ export class MockGenerator {
       case 'optIn': return 'false'
       case 'text':
       default:
+        // Unknown labels still get a value shaped by their wording.
+        if (/\b(no|number|code|id|ref)\b/.test(haystack)) return `${docPrefix(haystack)}-${rng.digits(6, true)}`
+        if (/\bname\b/.test(haystack)) return `${rng.pick(TEXT_FALLBACK)} ${rng.pick(profile.subjects).split(' ')[0]}`
         return rng.pick(TEXT_FALLBACK)
     }
   }
@@ -506,7 +557,20 @@ const SCHOOLS: Record<Region, string[]> = {
   uk: ['University of Manchester', 'University of Leeds', 'King\'s College London']
 }
 
-const TEXT_FALLBACK = ['Sample entry', 'Primary', 'Standard', 'Verified', 'Regular']
+const TEXT_FALLBACK = ['Standard', 'Premium', 'Express', 'General', 'Priority', 'Approved', 'Active', 'Northern', 'Central']
+
+const TRUCKS = [
+  'Volvo FH 460', 'Scania R 450', 'Hino 500 FG', 'Isuzu FVR 34', 'Mercedes Actros 2645', 'Fuso Fighter 1627',
+  'Tata Prima 4028.S', 'Ashok Leyland 3520', 'BharatBenz 2823R', 'Eicher Pro 3015', 'DAF XF 480', 'MAN TGX 18.510'
+]
+
+const CARS = ['Toyota Hilux', 'Ford Ranger', 'Honda City', 'Hyundai Creta', 'Toyota Camry', 'Nissan Navara', 'Mitsubishi Triton']
+
+/** Short uppercase prefix from a field's wording: "Document No." → DOC, "Permit number" → PER. */
+function docPrefix(haystack: string): string {
+  const word = haystack.split(' ').find(w => w.length > 2 && !/^(the|your|number|code|enter)$/.test(w)) || 'ref'
+  return word.slice(0, 3).toUpperCase()
+}
 
 /**
  * Generate mock values for every field. Fields that must not be

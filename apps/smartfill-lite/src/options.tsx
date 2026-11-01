@@ -5,10 +5,11 @@ import { useEffect, useRef, useState } from "react"
 import type { LLMProvider, ProviderGroup } from "@/api/ai/constants"
 import type { Settings } from "@/lib/settings"
 import type { StatusState } from "@/components/Status"
+import type { EmailMode, IdentityPrefs } from "@/lib/mock"
 
 // ** import lib
-import { activeBaseUrl, activeModel, getSettings, resetSettings, saveSettings } from "@/lib/settings"
-import { PROFILES, REGIONS } from "@/lib/mock"
+import { activeBaseUrl, activeModel, getSettings, resetSettings, saveSettings, transcriberFor } from "@/lib/settings"
+import { INBOX_PROVIDERS, PROFILES, REGIONS, parseEmails } from "@/lib/mock"
 import { IDLE, Status, errorText } from "@/components/Status"
 import { useSpeech } from "@/components/useSpeech"
 import { ExternalIcon, MicIcon, RefreshIcon } from "@/components/icons"
@@ -198,6 +199,104 @@ function ProviderCard({ settings, update }: { settings: Settings, update: (patch
   )
 }
 
+const EMAIL_MODES: Array<{ id: EmailMode, label: string }> = [
+  { id: 'random', label: 'Random' },
+  { id: 'mine', label: 'My emails' },
+  { id: 'inbox', label: 'Temp inbox' }
+]
+
+function IdentityCard({ settings, update }: { settings: Settings, update: (patch: Partial<Settings>) => void }) {
+  const identity = settings.identity
+  const [showPassword, setShowPassword] = useState(false)
+  const [emailText, setEmailText] = useState(identity.emails.join('\n'))
+  const set = (patch: Partial<IdentityPrefs>) => update({ identity: { ...identity, ...patch } })
+
+  const first = identity.emails[0]
+  const aliasExample = first ? `${first.split('@')[0].split('+')[0]}+k3x9a@${first.split('@')[1]}` : 'you+k3x9a@gmail.com'
+
+  return (
+    <section className="card">
+      <div className="card-head">
+        <h2>Login details</h2>
+        <p>Reuse the same password and emails you test with. Applies to both Mock and AI fill.</p>
+      </div>
+
+      <label>
+        <span className="field-label">Password</span>
+        <div className="row">
+          <input
+            type={showPassword ? 'text' : 'password'}
+            value={identity.password}
+            onChange={e => set({ password: e.target.value })}
+            placeholder="Empty = a new strong password every fill"
+            autoComplete="new-password"
+            spellCheck={false}
+          />
+          <button type="button" onClick={() => setShowPassword(!showPassword)}>{showPassword ? 'Hide' : 'Show'}</button>
+        </div>
+      </label>
+
+      <div>
+        <span className="field-label">Email</span>
+        <div className="segmented" role="radiogroup" aria-label="Email source">
+          {EMAIL_MODES.map(mode => (
+            <button
+              key={mode.id}
+              type="button"
+              role="radio"
+              aria-checked={identity.emailMode === mode.id}
+              className={identity.emailMode === mode.id ? 'active' : undefined}
+              onClick={() => set({ emailMode: mode.id })}>
+              {mode.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {identity.emailMode === 'random' && (
+        <p className="hint">A realistic address on <code>example.com</code> that matches the generated name. Nothing is delivered.</p>
+      )}
+
+      {identity.emailMode === 'mine' && (
+        <>
+          <label>
+            <span className="field-label">Your emails <span className="label-meta">one per line · picked at random</span></span>
+            <textarea
+              rows={3}
+              value={emailText}
+              onChange={e => setEmailText(e.target.value)}
+              onBlur={() => {
+                const emails = parseEmails(emailText)
+                setEmailText(emails.join('\n'))
+                set({ emails })
+              }}
+              placeholder={'jackson@gmail.com\nqa.team@company.com'}
+              spellCheck={false}
+            />
+          </label>
+          <label className="toggle">
+            <input type="checkbox" checked={identity.emailAlias} onChange={e => set({ emailAlias: e.target.checked })} />
+            <span className="toggle-copy">
+              Add a random +alias
+              <small>{identity.emailAlias ? `Each fill becomes e.g. ${aliasExample}. Gmail, Outlook and most providers still deliver it to you.` : 'Off: the same address is used every time.'}</small>
+            </span>
+          </label>
+        </>
+      )}
+
+      {identity.emailMode === 'inbox' && (
+        <label>
+          <span className="field-label">Disposable inbox</span>
+          <select value={identity.inboxDomain} onChange={e => set({ inboxDomain: e.target.value })}>
+            {INBOX_PROVIDERS.map(p => <option key={p.domain} value={p.domain}>{p.name} · @{p.domain}</option>)}
+          </select>
+          <p className="hint">A fresh public mailbox per fill, e.g. <code>maya.patel.k3x9@{identity.inboxDomain}</code>. After filling, use <strong>Open inbox</strong> in the popup to read the verification email. Anyone can read these inboxes, so use them only for test accounts.</p>
+        </label>
+      )}
+    </section>
+  )
+}
+
 function MicPermission() {
   const [state, setState] = useState<StatusState>({ tone: 'idle', message: '' })
 
@@ -238,7 +337,7 @@ function Options() {
       saveSettings({ instructions })
       return { ...current, instructions }
     })
-  })
+  }, settings ? transcriberFor(settings) : undefined)
 
   useEffect(() => {
     getSettings().then(setSettings)
@@ -291,6 +390,8 @@ function Options() {
         </div>
       </section>
 
+      <IdentityCard settings={settings} update={update} />
+
       <section className="card">
         <div className="card-head">
           <h2>AI instructions</h2>
@@ -307,7 +408,7 @@ function Options() {
           {speech.supported && (
             <button
               type="button"
-              className={`mic-button${speech.listening ? ' listening' : ''}`}
+              className={`mic-button${speech.listening ? ' listening' : ''}${speech.transcribing ? ' busy' : ''}`}
               onClick={speech.toggle}
               aria-label={speech.listening ? 'Stop dictation' : 'Dictate instructions'}
               title={speech.listening ? 'Stop dictation' : 'Dictate instructions'}>
@@ -315,7 +416,8 @@ function Options() {
             </button>
           )}
         </div>
-        {speech.error && <Status status={{ tone: 'warning', message: `Voice input: ${speech.error}. Use “Allow microphone” below if access was blocked.` }} />}
+        {speech.transcribing && <Status status={{ tone: 'loading', message: 'Transcribing…' }} />}
+        {speech.message && <Status status={{ tone: 'warning', message: speech.error === 'not-allowed' ? `${speech.message} Use “Allow microphone” below.` : speech.message }} />}
       </section>
 
       <section className="card">

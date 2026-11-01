@@ -10,7 +10,7 @@ import type { StatusState } from "@/components/Status"
 import { isRestrictedUrl, sendToTab } from "@/lib/utils/tabs"
 
 // ** import lib
-import { activeModel, getSettings, isAIReady, saveSettings } from "@/lib/settings"
+import { activeModel, getSettings, isAIReady, saveSettings, transcriberFor } from "@/lib/settings"
 import { PROFILES, PROFILE_MAP, REGIONS, newSeed } from "@/lib/mock"
 import { IDLE, Status, errorText } from "@/components/Status"
 import { useSpeech } from "@/components/useSpeech"
@@ -204,7 +204,7 @@ function Popup() {
     if (!settings) return
     const instructions = [settings.instructions.trim(), text].filter(Boolean).join(' ')
     update({ instructions })
-  })
+  }, settings ? transcriberFor(settings) : undefined)
 
   useEffect(() => {
     let cancelled = false
@@ -230,8 +230,9 @@ function Popup() {
     if (speech.error === 'not-allowed' || speech.error === 'service-not-allowed') {
       setStatus({ tone: 'warning', message: 'Microphone access is needed for voice input.' })
       setStatusAction({ label: 'Allow', onClick: () => openOptions('#mic') })
-    } else if (speech.error) {
-      setStatus({ tone: 'warning', message: `Voice input stopped: ${speech.error}` })
+    } else if (speech.message) {
+      setStatus({ tone: 'warning', message: speech.message })
+      if (speech.error === 'no-transcriber') setStatusAction({ label: 'Settings', onClick: () => openOptions() })
     }
   }, [speech.error])
 
@@ -271,7 +272,8 @@ function Popup() {
         showStatus({ tone: 'warning', message: `${summary}. ${res.warning}` })
         if (!isAIReady(settings)) setStatusAction({ label: 'Set up AI', onClick: () => openOptions() })
       } else {
-        showStatus({ tone: 'success', message: `${summary}.` })
+        showStatus({ tone: 'success', message: res.inbox ? `${summary} · ${res.inbox.email}` : `${summary}.` })
+        if (res.inbox) setStatusAction({ label: 'Open inbox', onClick: () => chrome.tabs.create({ url: res.inbox.url }) })
       }
       setCanUndo(true)
     } catch (error) {
@@ -383,7 +385,7 @@ function Popup() {
               {speech.supported && (
                 <button
                   type="button"
-                  className={`mic-button${speech.listening ? ' listening' : ''}`}
+                  className={`mic-button${speech.listening ? ' listening' : ''}${speech.transcribing ? ' busy' : ''}`}
                   onClick={speech.toggle}
                   title={speech.listening ? 'Stop dictation' : 'Dictate instructions'}
                   aria-label={speech.listening ? 'Stop dictation' : 'Dictate instructions'}>
@@ -395,7 +397,7 @@ function Popup() {
 
           <button
             type="button"
-            className="primary fill-button"
+            className={`primary fill-button${busy === 'fill' || busy === 'regenerate' ? ' busy' : ''}`}
             onClick={async () => {
               if (settings) await saveSettings({ instructions: settings.instructions })
               fill(false)

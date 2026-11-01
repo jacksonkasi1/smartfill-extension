@@ -8,10 +8,10 @@
 export const NATIVE_MAX_ATTEMPTS = 1
 
 /** Maximum attempts for a single custom-UI field. */
-export const CUSTOM_MAX_ATTEMPTS = 2
+export const CUSTOM_MAX_ATTEMPTS = 1
 
 /** Polling gap (ms) between attempts on custom UI. */
 export const CUSTOM_RETRY_GAP_MS = 120
 
 /** Total budget (ms) for resolving a custom dropdown popup. */
-export const CUSTOM_POPUP_BUDGET_MS = 250
+export const CUSTOM_POPUP_BUDGET_MS = 200

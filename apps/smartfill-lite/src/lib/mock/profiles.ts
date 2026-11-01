@@ -101,7 +101,7 @@ export const PROFILES: Profile[] = [
     id: 'logistics',
     name: 'Logistics & Shipping',
     description: 'Logistics / courier / freight form: shipment booking, pickup, consignment, warehouse',
-    keywords: ['shipment', 'shipping', 'consignment', 'consignee', 'consignor', 'awb', 'tracking', 'courier', 'freight', 'cargo', 'pickup', 'delivery', 'warehouse', 'parcel', 'waybill', 'hsn', 'container', 'fleet', 'dispatch', 'e-way'],
+    keywords: ['shipment', 'shipping', 'consignment', 'consignee', 'consignor', 'awb', 'tracking', 'courier', 'freight', 'cargo', 'pickup', 'delivery', 'warehouse', 'parcel', 'waybill', 'hsn', 'container', 'fleet', 'dispatch', 'e-way', 'transport', 'truck', 'lorry', 'trailer', 'tonnage', 'tail lift', 'bonded', 'driver', 'route', 'logistic'],
     orgs: ['SwiftLine Logistics', 'BlueDart Freight Services', 'Continental Cargo Movers', 'Harbor Point Shipping'],
     roles: ['Logistics Coordinator', 'Warehouse Manager', 'Fleet Supervisor', 'Dispatch Executive'],
     departments: ['Dispatch', 'Warehouse', 'Fleet Operations', 'Customs'],

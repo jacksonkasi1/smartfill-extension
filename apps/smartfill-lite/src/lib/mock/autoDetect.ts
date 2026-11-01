@@ -68,7 +68,8 @@ export function detectProfile(signals: PageSignals): DetectedProfile {
   for (const profile of PROFILES) {
     let score = 0
     for (const keyword of profile.keywords) {
-      score += countHits(host, keyword) * 3
+      // Hosts glue words together ("visionstransport"), so longer keywords also match inside them.
+      score += (countHits(host, keyword) || (keyword.length >= 6 && host.replace(/ /g, '').includes(keyword) ? 1 : 0)) * 3
       score += Math.min(countHits(title, keyword), 2) * 3
       score += Math.min(countHits(headings, keyword), 3) * 2
       score += Math.min(countHits(labels, keyword), 3)

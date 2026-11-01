@@ -17,7 +17,7 @@ body { width: 340px; }
 .logo {
   flex: none;
   border-radius: 10px;
-  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.22);
+  box-shadow: 0 4px 12px rgba(0, 113, 227, 0.22);
 }
 .title { flex: 1; min-width: 0; }
 .title h1 {
@@ -25,7 +25,7 @@ body { width: 340px; }
   font-size: 19px;
   font-weight: 700;
   line-height: 1.15;
-  background: linear-gradient(90deg, #047857 0%, #10b981 55%, #84cc16 120%);
+  background: linear-gradient(90deg, #0a84ff 0%, #5e5ce6 60%, #30d158 130%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -80,6 +80,16 @@ body { width: 340px; }
   height: 44px;
   border-radius: 999px;
   font-size: 15px;
+}
+/* While working, stay solid and breathe gently instead of greying out. */
+.fill-button.busy:disabled {
+  opacity: 1;
+  cursor: progress;
+  animation: breathe 1.8s ease-in-out infinite;
+}
+@keyframes breathe {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.12); }
 }
 .secondary-actions {
   display: flex;

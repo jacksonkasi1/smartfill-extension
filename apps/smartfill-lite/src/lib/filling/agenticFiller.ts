@@ -34,7 +34,14 @@ export async function fillForm(
   let filled = 0
   let failed = 0
 
-  for (const field of fields) {
+  // Native controls fill synchronously; custom dropdowns wait for their
+  // popup, so they go last and the rest of the form appears instantly.
+  const ordered = [
+    ...fields.filter(f => !(f.type === 'select' && isCustomSelectElement(f.element))),
+    ...fields.filter(f => f.type === 'select' && isCustomSelectElement(f.element))
+  ]
+
+  for (const field of ordered) {
     const value = getFieldValue(field, data)
 
     // Missing / undefined / null: skip silently. Empty string is OK and

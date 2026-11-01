@@ -1,6 +1,9 @@
 // ** import types
 import type { FormField, AIFormData } from '@/types/extension'
 
+// ** import constants
+import { CUSTOM_POPUP_BUDGET_MS } from './constants'
+
 // ---------------------------------------------------------------------------
 // Native value setters that survive React-controlled inputs
 // ---------------------------------------------------------------------------
@@ -168,11 +171,14 @@ export async function fillCustomSelect(
     trigger.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }))
     trigger.click()
 
-    const popup = await resolveCustomSelectPopup(trigger, 250)
+    const popup = await resolveCustomSelectPopup(trigger, CUSTOM_POPUP_BUDGET_MS)
     if (!popup) return false
 
-    const option = findCustomOption(popup, value)
-    if (!option) return false
+    const option = findCustomOption(popup, value) ?? firstCustomOption(popup)
+    if (!option) {
+      trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      return false
+    }
 
     option.scrollIntoView({ block: 'nearest' })
     option.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
@@ -493,6 +499,13 @@ function findCustomOption(popup: HTMLElement, value: string): HTMLElement | null
     if (aria && target.includes(aria)) return opt
   }
   return null
+}
+
+/** Any real option, used when the generated value is not in the list. */
+function firstCustomOption(popup: HTMLElement): HTMLElement | null {
+  const options = Array.from(popup.querySelectorAll('[role="option"], li[role="menuitem"], [data-value]')) as HTMLElement[]
+  const real = options.filter(o => o.getAttribute('aria-disabled') !== 'true' && !/^(select|choose)/i.test((o.textContent || '').trim()))
+  return real.length ? real[Math.floor(Math.random() * real.length)] : null
 }
 
 function isElementVisible(el: HTMLElement): boolean {

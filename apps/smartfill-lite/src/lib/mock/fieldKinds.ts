@@ -24,7 +24,8 @@ export type FieldKind =
   | 'allergies' | 'medications' | 'diagnosis' | 'doctor' | 'height' | 'weight' | 'batchNumber'
   | 'expiryDate'
   // logistics, commerce & vehicles
-  | 'trackingNumber' | 'hsCode' | 'containerNumber' | 'vehicleNumber' | 'vin' | 'engineNumber'
+  | 'trackingNumber' | 'hsCode' | 'containerNumber' | 'vehicleNumber' | 'vehicleName' | 'vin' | 'engineNumber'
+  | 'vehicleType' | 'tonnage' | 'documentNumber' | 'percent' | 'tenure'
   | 'dimensions' | 'invoiceNumber' | 'orderNumber' | 'sku' | 'quantity' | 'amount' | 'currency'
   | 'coupon' | 'licenseNumber'
   // education, travel, property, legal
@@ -98,8 +99,11 @@ const RULES: Rule[] = [
   [/tracking|\bawb\b|air ?way ?bill|consignment ?(no|number|id)\b|waybill|\blr ?(no|number)\b|docket/, 'trackingNumber'],
   [/\bhs ?(n|code)\b|\bhsn|harmoni[sz]ed/, 'hsCode'],
   [/container ?(no|number|id)?\b/, 'containerNumber'],
-  [/\bvin\b|chassis/, 'vin'],
-  [/engine ?(no|number)\b/, 'engineNumber'],
+  [/\bvin\b|chass?is|frame ?(no|number)\b/, 'vin'],
+  [/engine ?(no|number|serial)\b/, 'engineNumber'],
+  [/(truck|vehicle|fleet|asset|bus|car|trailer|lorry|van|unit) ?(name|model|make)\b|\bmake ?(and|&)? ?model\b/, 'vehicleName'],
+  [/(truck|vehicle|body|trailer|fleet) ?type\b/, 'vehicleType'],
+  [/tonn?age|\bgvw\b|payload|load ?capacity|\bcapacity\b/, 'tonnage'],
   [/vehicle ?(no|number|reg)\b|registration ?(no|number|plate)\b|licen[cs]e ?plate|number ?plate|truck ?(no|number)\b/, 'vehicleNumber'],
   [/dimension|\bl ?x ?w|length.*width/, 'dimensions'],
   [/invoice/, 'invoiceNumber'],
@@ -107,6 +111,7 @@ const RULES: Rule[] = [
   [/\bsku\b|item ?code|product ?code|part ?(no|number)\b/, 'sku'],
   [/coupon|promo|voucher|discount ?code|referral ?code/, 'coupon'],
   [/licen[cs]e ?(no|number)\b|registration ?(no|number)\b|\bregn? ?no\b/, 'licenseNumber'],
+  [/(document|doc|certificate|cert|permit|serial|registration) ?(no|number|id)\b|\bs ?no\b/, 'documentNumber'],
   [/flight ?(no|number)?\b/, 'flightNumber'],
   [/\bpnr\b|booking ?(ref|reference|id|no)\b|confirmation ?(no|number|code)\b|reservation ?(no|number|id)\b/, 'bookingRef'],
   [/case ?(no|number|id)\b|matter ?(no|number)\b|ticket ?(no|id|number)\b|complaint ?(no|number)\b/, 'caseNumber'],
@@ -116,6 +121,8 @@ const RULES: Rule[] = [
   [/student ?(id|no)\b|roll ?(no|number)\b|enrol?ment|admission ?(no|number)\b/, 'studentId'],
   [/school|college|university|institut|alma mater/, 'school'],
   [/degree|qualification|course|program(me)?\b|\bmajor\b|stream|speciali[sz]/, 'degree'],
+  [/interest|\broi\b|\bapr\b|(tax|gst|vat|commission|discount|tds|margin) ?(rate|%|percent)|\brate ?%/, 'percent'],
+  [/no ?of ?(months|years|installments|instalments|emis?)|tenure|loan ?term|duration ?(in )?months|\bmonths\b/, 'tenure'],
   [/\bc?gpa\b|percentage|marks|\bgrade\b/, 'gpa'],
   [/(graduat|passing|completion) ?(year|date)|year of (passing|graduation)|batch year/, 'graduationYear'],
   [/notice ?period/, 'noticePeriod'],
@@ -163,8 +170,9 @@ const RULES: Rule[] = [
   [/sq ?ft|square|carpet|built ?up|plot ?(size|area)|\barea\b/, 'area'],
   [/qty|quantity|\bunits\b|no\.? of (items|units|packages|boxes|cartons)|pieces/, 'quantity'],
   [/currency/, 'currency'],
-  [/amount|price|cost|\bfee|budget|revenue|\bvalue\b|\brate\b|premium|deposit|loan|donation|sum ?(assured|insured)/, 'amount'],
+  [/amount|price|cost|\bfee|budget|revenue|\bvalue\b|\brate\b|premium|deposit|loan|donation|sum ?(assured|insured)|payment|\bemi\b|instal?l?ment|balance|outstanding|charges?\b|freight|\bfare\b|\btoll\b|\bmrp\b/, 'amount'],
 
+  [/\bdate\b|\bdated\b|\bdue ?on\b/, 'date'],
   [/reference|\bref ?(no|number|id)?\b|application ?(no|id|number)\b|\bid\b|consumer ?(no|number)\b|account ?id|customer ?id/, 'reference'],
   [/subject|topic|headline|\btitle\b/, 'subject'],
   [/message|comment|note|description|details|remarks|about|\bbio\b|summary|feedback|reason|purpose|instruction|cover ?letter|requirement|explain|tell us|anything else|additional/, 'longText']
@@ -208,18 +216,35 @@ const AUTOCOMPLETE: Record<string, FieldKind> = {
 const CONSENT = /terms|condition|privacy|policy|agree|accept|consent|declar|acknowledg|certify|confirm that/
 const OPT_IN = /newsletter|marketing|subscribe|updates|offers|promotion|whats ?app updates|notify me|sms alerts/
 
-/** Lower-case "name id label placeholder" with camelCase and separators split into words. */
-export function fieldHaystack(field: FormField): string {
-  const el = field.element as HTMLElement | undefined
-  const id = typeof el?.getAttribute === 'function' ? el.getAttribute('id') || '' : ''
-  return [field.name, id, field.label, field.placeholder]
-    .filter(Boolean)
-    .join(' ')
+/** Kinds matched by broad words ("name", "id", "title"); a label hitting only these defers to the full haystack. */
+const GENERIC_KINDS = new Set<FieldKind>(['fullName', 'reference', 'subject', 'longText', 'company', 'text'])
+
+function normalizeText(value: string): string {
+  return value
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/[_\-.[\]():*#]+/g, ' ')
     .toLowerCase()
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+function visibleText(field: FormField): string {
+  const label = field.label && field.label !== 'Unnamed Field' ? field.label : ''
+  return normalizeText([label, field.placeholder].filter(Boolean).join(' '))
+}
+
+function matchRules(text: string): FieldKind | undefined {
+  for (const [pattern, kind] of RULES) {
+    if (pattern.test(text)) return kind
+  }
+  return undefined
+}
+
+/** Lower-case "name id label placeholder" with camelCase and separators split into words. */
+export function fieldHaystack(field: FormField): string {
+  const el = field.element as HTMLElement | undefined
+  const id = typeof el?.getAttribute === 'function' ? el.getAttribute('id') || '' : ''
+  return normalizeText([field.name, id, field.label, field.placeholder].filter(Boolean).join(' '))
 }
 
 export function classifyField(field: FormField): FieldKind {
@@ -238,9 +263,15 @@ export function classifyField(field: FormField): FieldKind {
     : ''
   if (AUTOCOMPLETE[autocomplete]) return AUTOCOMPLETE[autocomplete]
 
-  for (const [pattern, kind] of RULES) {
-    if (pattern.test(haystack)) return kind
+  // The visible label is what the page author meant; `name`/`id` are often
+  // copy-pasted between inputs (e.g. every EMI input named "truck_no").
+  const labelText = visibleText(field)
+  if (labelText) {
+    const fromLabel = matchRules(labelText)
+    if (fromLabel && !GENERIC_KINDS.has(fromLabel)) return fromLabel
   }
+  const kind = matchRules(haystack)
+  if (kind) return kind
 
   switch (inputType) {
     case 'email': return 'email'

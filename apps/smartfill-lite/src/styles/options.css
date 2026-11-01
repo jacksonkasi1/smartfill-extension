@@ -10,13 +10,13 @@ body { min-height: 100vh; font-size: 14px; }
 }
 
 .brand { display: flex; align-items: center; gap: 14px; }
-.brand img { border-radius: 12px; box-shadow: 0 6px 16px rgba(5, 150, 105, 0.25); }
+.brand img { border-radius: 12px; box-shadow: 0 6px 16px rgba(0, 113, 227, 0.22); }
 .brand p { margin: 0; color: var(--muted); font-size: 13px; }
 .brand-name {
   font-size: 26px;
   font-weight: 700;
   letter-spacing: -0.025em;
-  background: linear-gradient(90deg, #047857 0%, #10b981 55%, #84cc16 120%);
+  background: linear-gradient(90deg, #0a84ff 0%, #5e5ce6 60%, #30d158 130%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -80,3 +80,11 @@ label.toggle { display: flex; }
 .saved { color: var(--success); font-size: 12.5px; font-weight: 500; opacity: 0; transition: opacity 0.2s; }
 .saved.on { opacity: 1; }
 .version { margin-left: auto; color: var(--faint); font-size: 12px; }
+
+.hint { margin: 6px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.hint code, .toggle-copy code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--surface);
+  font-size: 11.5px;
+}

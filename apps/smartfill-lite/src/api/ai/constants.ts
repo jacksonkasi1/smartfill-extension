@@ -17,6 +17,7 @@ export type LLMProvider =
   | 'moonshot'
   | 'nvidia'
   | 'sambanova'
+  | 'ollamacloud'
   | 'ollama'
   | 'lmstudio'
   | 'custom'
@@ -237,6 +238,16 @@ export const PROVIDERS: Record<LLMProvider, ProviderConfig> = {
     models: ['Meta-Llama-3.3-70B-Instruct', 'DeepSeek-V3-0324'],
     requiresApiKey: true,
     keyUrl: 'https://cloud.sambanova.ai/apis'
+  },
+  ollamacloud: {
+    name: 'Ollama Cloud',
+    kind: 'openai',
+    group: 'more',
+    baseUrl: 'https://ollama.com/v1',
+    defaultModel: 'gpt-oss:120b',
+    models: ['gpt-oss:120b', 'gpt-oss:20b', 'deepseek-v3.1:671b', 'qwen3-coder:480b'],
+    requiresApiKey: true,
+    keyUrl: 'https://ollama.com/settings/keys'
   },
   ollama: {
     name: 'Ollama (local)',

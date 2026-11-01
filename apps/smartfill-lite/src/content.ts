@@ -197,7 +197,7 @@ async function fillPage(seed: number = newSeed(), modeOverride?: FillMode) {
 
   // Mock values are always generated: they are the whole answer in
   // mock mode and the fallback for anything the AI leaves out.
-  const generator = new MockGenerator({ profile, region: context.region, seed })
+  const generator = new MockGenerator({ profile, region: context.region, seed, identity: settings.identity })
   const mock = generateMockData(fields, generator) as Record<string, any>
   if (safeFillingMode) {
     for (const field of fields) {
@@ -234,6 +234,17 @@ async function fillPage(seed: number = newSeed(), modeOverride?: FillMode) {
     }
   }
 
+  // Pinned login details win over whatever the AI wrote.
+  const pinPassword = Boolean(settings.identity.password.trim())
+  for (const field of fields) {
+    const kind = classifyField(field)
+    const pinned = (generator.pinnedEmail && (kind === 'email' || kind === 'confirmEmail'))
+      || (pinPassword && (kind === 'password' || kind === 'confirmPassword'))
+    // Read from the generator, not `mock`: Safe Filling Mode blanks passwords
+    // there, but a password the user pinned counts as one they provided.
+    if (pinned) data[field.name] = generator.valueFor(field, kind)
+  }
+
   if (settings.keepExisting) {
     for (const field of fields) {
       if (hasUserValue(field)) data[field.name] = null
@@ -266,6 +277,9 @@ async function fillPage(seed: number = newSeed(), modeOverride?: FillMode) {
     mode,
     profile: context.profileId,
     region: context.region,
+    inbox: generator.chosenEmail?.inboxUrl
+      ? { email: generator.chosenEmail.email, url: generator.chosenEmail.inboxUrl, name: generator.chosenEmail.inboxName }
+      : undefined,
     warning,
     errors: fillResult.filled > 0 ? [] : ['No fields could be filled on this page.']
   }
