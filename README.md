@@ -1,207 +1,201 @@
-# SmartFill Monorepo
+<p align="center">
+  <img src="apps/smartfill-lite/assets/icon.png" alt="SmartFill logo" width="96" height="96">
+</p>
 
-A browser extension with memory RAG capabilities for intelligent form filling using AI.
+<h1 align="center">SmartFill</h1>
 
-## Architecture
+<p align="center">
+  <strong>Fill any web form in one click.</strong><br>
+  Realistic test data for 20 industries, or smart values from the AI you choose.
+</p>
 
-This monorepo contains:
+<p align="center">
+  <a href="https://chromewebstore.google.com/detail/smartfill-lite-ai-form-fi/gcfnhnhofhponjlaanblhnbakpbmdmol">
+    <img src="https://img.shields.io/badge/Chrome%20Web%20Store-Add%20to%20Chrome-0071e3?logo=googlechrome&logoColor=white" alt="Add to Chrome">
+  </a>
+</p>
 
-- **apps/smartfill-extension-clerk** - Chrome extension built with Plasmo and Clerk auth
-- **apps/website** - Next.js dashboard with Radix UI components  
-- **apps/rag-service** - Hono-based RAG service with TiDB Vector database for knowledge management
+<p align="center">
+  <img src="apps/smartfill-lite/docs/demo.gif" alt="SmartFill filling a truck registration form" width="880">
+</p>
 
-## Setup
+---
 
-1. Copy environment variables:
+## What it does
+
+Testing a form by hand means typing the same name, email and phone again
+and again. SmartFill does it for you.
+
+1. Open any page with a form.
+2. Click the SmartFill icon.
+3. Press **Fill form**.
+
+Every field is filled: text boxes, dropdowns, radio buttons, checkboxes and
+dates. Click **Generate again** for new values, or **Undo** to put the page
+back exactly as it was.
+
+## Two ways to fill
+
+| | **Mock data** | **AI fill** |
+| --- | --- | --- |
+| How it works | Makes up realistic values on your computer | Asks the AI provider you picked |
+| Needs | Nothing. Works offline | Your own API key |
+| Speed | Instant | A few seconds |
+| Best for | Everyday testing | Unusual forms, or when you want to describe the person |
+
+AI fill never leaves a gap: if the AI skips a field, mock data fills it.
+
+<p align="center">
+  <img src="apps/smartfill-lite/store/screenshot-1.png" alt="Mock data fill" width="640">
+</p>
+
+## Smart about every field
+
+SmartFill reads the label you see on the page, not just the hidden field
+name. So "Monthly Payment" gets an amount, "Interest Rate" gets a percent
+and "Truck Name" gets a truck model, even when the page's code is messy.
+
+- **One person per fill.** The name, email, phone and address all match.
+- **Real formats.** GSTIN, PAN, IFSC, Aadhaar, SSN, NPI, VIN, IBAN, AWB and
+  more look valid and pass their checksums. They are still fake.
+- **Dates match the page.** If the page shows `01-Nov-2026`, SmartFill writes
+  dates the same way.
+- **Region aware.** India, US or UK phone numbers, postcodes and date styles.
+  Auto picks one from the website and its fields.
+
+### 20 industries
+
+Leave it on **Auto** and SmartFill guesses the industry from the page. Or
+pick one yourself; your choice is remembered.
+
+General · Healthcare · CRM / Sales · Logistics · Government · Banking ·
+Insurance · E-commerce · HR & Jobs · Education · Real Estate · Travel ·
+Legal · Pharmacy & Lab · Manufacturing · SaaS Sign-up · Restaurant ·
+Automotive · Telecom & Utilities · Events & Non-profit
+
+## Your own login details
+
+Developers sign up with the same details again and again. In
+**Settings → Login details** you can set:
+
+- **Password:** one fixed password for every form. Leave it empty for a new
+  strong password each time.
+- **Email**, three choices:
+  - **Random:** a made-up `example.com` address.
+  - **My emails:** your own addresses. Turn on **+alias** to get a new address
+    each time that still lands in your inbox, like `you+k3x9a@gmail.com`.
+  - **Temp inbox:** a free public inbox (Mailinator, Maildrop, YOPmail,
+    InboxKitten, Guerrilla Mail). After filling, press **Open inbox** in the
+    popup to read the verification email.
+
+## AI providers
+
+Pick any of these in **Settings → AI provider**. The model list loads by
+itself, or you can type any model name. **Test connection** checks your key.
+
+OpenAI · Anthropic Claude · Google Gemini · DeepSeek · OpenRouter · xAI Grok ·
+Groq · Mistral · Together · Fireworks · Perplexity · Cerebras · Cohere ·
+Alibaba Qwen · Moonshot Kimi · NVIDIA · SambaNova · Ollama Cloud ·
+Ollama (local) · LM Studio (local) · any OpenAI-compatible server
+
+You can also give the AI instructions, such as *"Senior doctor in Chennai,
+use @acme.in emails"*.
+
+## Voice input
+
+Press the mic to speak your AI instructions instead of typing them.
+
+Chrome and Edge turn speech into text for free. Some browsers, like
+**Brave**, can't. For those, choose a speech-to-text service in
+**Settings → Voice input**:
+
+| Service | Good to know |
+| --- | --- |
+| Groq Whisper | Free tier, very fast. **Best place to start.** |
+| Deepgram | Free credit when you sign up |
+| AssemblyAI | Free credit when you sign up |
+| Google Gemini | Free tier |
+| ElevenLabs Scribe | Free monthly allowance, great with accents |
+| Mistral Voxtral | Low cost |
+| OpenAI | Paid, very accurate |
+| Together AI | Paid |
+| Fireworks AI | Paid |
+| Custom | Your own server (LocalAI, faster-whisper-server, …) |
+
+Voice and form filling are **separate**. For example, you can fill forms with
+DeepSeek and speak through Groq. If you already saved a Groq, OpenAI, Gemini,
+Mistral, Together or Fireworks key for AI fill, voice reuses it.
+
+<p align="center">
+  <img src="apps/smartfill-lite/docs/settings-voice.png" alt="Voice input settings" width="560">
+</p>
+
+## Handy extras
+
+- **Keyboard shortcut:** `Alt` + `Shift` + `F` fills the page without opening
+  the popup.
+- **Keep my values:** only fill empty fields.
+- **Safe Filling Mode:** leave passwords, ID numbers and card fields blank,
+  and leave "I agree" boxes unticked.
+- **Record & replay:** record clicks and typing on a site, then replay them.
+
+## Privacy
+
+- There is no SmartFill server and no tracking.
+- Settings and API keys stay in your browser and are never synced.
+- **Mock data** never leaves your computer.
+- **AI fill** sends field labels, options and your instructions straight to
+  the AI provider you picked. Values already typed on the page are never sent.
+- **Voice** clips go only to the speech service you picked, and only when you
+  press the mic.
+
+---
+
+## For developers
+
+SmartFill is built with [Plasmo](https://www.plasmo.com/) (Chrome Manifest V3),
+React and TypeScript.
+
 ```bash
-cp .env.example .env.local
-```
-
-2. Fill in your API keys in `.env.local`:
-   - Clerk authentication keys
-   - OpenAI API key  
-   - Gemini API key (for extension)
-
-3. Install dependencies:
-```bash
+# from the repository root
 bun install
+
+cd apps/smartfill-lite
+bun run dev        # development build with live reload
+bun run build      # production build → build/chrome-mv3-prod
+bun run package    # zip for the Chrome Web Store → build/chrome-mv3-prod.zip
+bun test tests/    # unit tests
 ```
 
-4. Build all apps:
-```bash
-bun run build
-```
+To try a build, open `chrome://extensions`, turn on **Developer mode**,
+click **Load unpacked** and choose `build/chrome-mv3-prod`.
 
-## Development
+### Where things live
 
-- Run all apps: `bun run dev`
-- Build all: `bun run build`
-- Lint all: `bun run lint`
-- Type check: `bun run typecheck`
-- Test: `bun run test`
-- Clean: `bun run clean`
+Paths are inside `apps/smartfill-lite/`.
 
-## Environment Variables
+| Path | What it holds |
+| --- | --- |
+| `src/popup.tsx` | The popup: mode, industry, region, Fill, Undo |
+| `src/options.tsx` | The settings page |
+| `src/content.ts` | Runs on the page: finds fields, makes values, fills them |
+| `src/background.ts` | All AI requests and the keyboard shortcut |
+| `src/api/ai/` | AI providers, prompt and reply parsing |
+| `src/api/voice/` | Speech-to-text services |
+| `src/lib/mock/` | Mock data: field detection, 20 industries, regions, login presets |
+| `src/lib/settings.ts` | Saved settings |
+| `store/` | Chrome Web Store images |
+| `docs/` | README images and demo GIF |
 
-- **NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY** & **CLERK_SECRET_KEY** - Clerk authentication
-- **OPENAI_API_KEY** - OpenAI API for RAG service
-- **GEMINI_API_KEY** - Google Gemini API for extension
-- **NODE_ENV** - Development/production environment
+Chrome Web Store text, permission reasons and privacy answers are in
+[STORE_LISTING.md](apps/smartfill-lite/STORE_LISTING.md).
 
-## Apps Details
+### Other apps in this repository
 
-### Browser Extension (`apps/smartfill-extension-clerk`)
-- Built with **Plasmo** framework
-- **Clerk** authentication integration
-- **Google Gemini AI** for form data generation
-- Chrome extension with form-filling capabilities
-- **TypeScript** + **React**
+| Folder | What it is |
+| --- | --- |
+| `apps/smartfill-lite` | The SmartFill Chrome extension (this README) |
+| `apps/website` | Next.js website for SmartFill |
+| `apps/rag-service` | Hono + TiDB Vector service from the earlier RAG version |
 
-### Website (`apps/website`) 
-- **Next.js 15** application
-- **Clerk** authentication
-- **Radix UI** components with **Tailwind CSS**
-- **TanStack Query** for server state management
-- **TanStack Table** for data tables
-- **React Hook Form** with **Zod** validation
-- **Motion** for animations
-- **TypeScript** support
-
-### RAG Service (`apps/rag-service`)
-- **Hono** web framework
-- **Drizzle ORM** with **TiDB** database
-- **TiDB Vector** for RAG embeddings storage
-- **OpenAI** embeddings and completions
-- **Zod** schema validation
-- **Svix** webhooks
-- **MySQL2** database driver
-- User-specific knowledge management
-- **TypeScript** with ESM support
-
-## Tech Stack Summary
-
-### Frontend Technologies
-- **React 18** - UI library
-- **Next.js 15** - React framework
-- **TypeScript** - Type safety
-- **Tailwind CSS** - Styling
-- **Radix UI** - Component library
-- **Motion** - Animation library
-
-### Backend Technologies  
-- **Hono** - Web framework
-- **Drizzle ORM** - Database ORM
-- **TiDB** - Database with vector support
-- **MySQL2** - Database driver
-- **Zod** - Schema validation
-
-### AI & Authentication
-- **OpenAI** - Embeddings and completions
-- **Google Gemini AI** - Form data generation
-- **Clerk** - Authentication service
-
-### Development Tools
-- **Plasmo** - Browser extension framework
-- **Bun** - Package manager and runtime
-- **Turbo** - Monorepo build system
-- **ESLint** - Code linting
-- **Svix** - Webhook management
-
-## Features
-
-- **AI-Powered Form Filling** - Intelligent form completion using Gemini AI and RAG
-- **User Authentication** - Secure login with Clerk across all apps
-- **Knowledge Management** - Personal RAG service for each user with vector embeddings
-- **Cross-platform** - Browser extension + web dashboard
-- **Type-safe** - Full TypeScript support across all apps
-
-## How we built it - Multi-Step Agent Architecture
-
-Our SmartFill agent chains together these automated steps:
-
-1. **Data Ingestion & Indexing (TiDB Vector)**
-   - Captures form data and user sessions
-   - Generates embeddings via OpenAI API
-   - Stores vectors in TiDB Serverless for semantic search
-
-2. **Intelligent Search & Retrieval**
-   - Vector similarity search in TiDB for relevant form data
-   - Full-text search for exact matches
-   - RAG pipeline combines both for context
-
-3. **LLM Chain Processing**
-   - OpenAI for embedding generation
-   - Gemini for form field interpretation
-   - Multi-model approach for accuracy
-
-4. **External Tool Integration**
-   - Clerk API for authentication
-   - Browser automation APIs
-   - Session replay engine
-
-5. **Automated Workflow Execution**
-   - End-to-end: Form detection → Context retrieval → AI processing → Auto-fill → Validation
-   - All steps execute automatically without user intervention
-
-## Why TiDB?
-
-SmartFill leverages TiDB Serverless for:
-- Vector embeddings storage with lightning-fast retrieval
-- Hybrid search combining semantic and keyword matching
-- Scalable, serverless architecture
-- Multi-tenant data isolation
-
-## Testing Vector Operations
-
-To test TiDB Vector functionality:
-
-```bash
-# Test TiDB vector operations
-bun run test:tidb-vectors
-
-# Test full integration with vector search
-bun run test:integration
-
-# Run all tests including vector performance
-bun run test:all-integration
-```
-
-Requires:
-- `DATABASE_URL` in `.env` file pointing to TiDB instance
-- OpenAI API key for embeddings
-- Running RAG service for integration tests
-- OpenAI API key for embedding generation
-- Running RAG service for integration tests
-
-## Impact
-
-SmartFill makes web automation accessible to everyone, particularly helping users with disabilities, elderly individuals, and small businesses automate tedious form-filling tasks & Q&A.
-
----
-
-### Raw SQL Vector Query Example
-
-```sql
--- Create table with vector column
-CREATE TABLE documents (
-  id INT PRIMARY KEY,
-  content TEXT,
-  embedding VECTOR(1536) -- OpenAI embedding dimension
-);
-
--- Insert document with vector embedding
-INSERT INTO documents (id, content, embedding) 
-VALUES (1, 'Sample text', '[0.1, 0.2, 0.3, ...]');
-
--- Vector similarity search using cosine distance
-SELECT id, content, 
-       VEC_COSINE_DISTANCE(embedding, '[0.1, 0.2, 0.3, ...]') as distance
-FROM documents 
-ORDER BY distance ASC 
-LIMIT 5;
-```
-
----
-
-# TODO: 
-        - https://www.featurebase.app/pricing (integrate support ticket in the websites)
+The earlier RAG / TiDB architecture notes are kept in [docs/monorepo.md](docs/monorepo.md).
