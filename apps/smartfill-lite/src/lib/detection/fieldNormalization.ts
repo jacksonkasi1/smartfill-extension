@@ -28,7 +28,7 @@ export function normalizeFormFields(rawFields: FormField[]): FieldNormalizationR
     else groups.push([field])
   }
 
-  const fields = groups.map(group => [...group].sort((a, b) => scoreField(b) - scoreField(a))[0])
+  const fields = ensureUniqueNames(groups.map(group => [...group].sort((a, b) => scoreField(b) - scoreField(a))[0]))
   const duplicateGroups = groups
     .filter(group => group.length > 1)
     .map(group => {
@@ -51,7 +51,11 @@ export function normalizeFormFields(rawFields: FormField[]): FieldNormalizationR
 function isUsableField(field: FormField): boolean {
   if (!field.name || !field.element) return false
   const element = field.element as unknown as HTMLElement
-  if (element.hidden || element.getAttribute?.('aria-hidden') === 'true') return false
+  // A hidden native select paired with its visible trigger, or drawn by an
+  // enhancer (select2 sets aria-hidden, Choices sets hidden), is the field.
+  const stands = Boolean(field.trigger || field.enhanced)
+  if (element.hidden && !stands) return false
+  if (element.getAttribute?.('aria-hidden') === 'true' && !stands) return false
   if ((element as HTMLInputElement).disabled || element.hasAttribute?.('disabled')) return false
   // A listbox/menu is popup content, not the value-bearing control. Triggers
   // are represented by combobox/button candidates and remain eligible.
@@ -60,11 +64,14 @@ function isUsableField(field: FormField): boolean {
 }
 
 function areLikelyDuplicates(a: FormField, b: FormField): boolean {
+  if (a.element === b.element) return true
+  // The same id twice is one control rendered twice by a framework. Two
+  // inputs that only share a copy-pasted `name` are two separate fields;
+  // `ensureUniqueNames` gives them their own keys.
   const aName = normalize(a.name)
-  const bName = normalize(b.name)
-  // Repeated exact names cannot be represented independently in JSON. Limit
-  // this to the same form/section to avoid merging unrelated page regions.
-  if (aName && aName === bName && sameScope(a, b)) return true
+  // Compare real id attributes: FormField.id falls back to the name.
+  const aId = a.element.getAttribute?.('id')
+  if (aName && aName === normalize(b.name) && aId && aId === b.element.getAttribute?.('id') && sameScope(a, b)) return true
 
   const aLabel = semanticText(a)
   const bLabel = semanticText(b)
@@ -73,6 +80,25 @@ function areLikelyDuplicates(a: FormField, b: FormField): boolean {
   // Equal labels alone are insufficient: e.g. business and finance phone
   // sections. Require a DOM relationship or a framework-generated fallback.
   return areDomRelated(a.element, b.element) || isGeneratedIdentifier(a.id) || isGeneratedIdentifier(b.id)
+}
+
+/**
+ * Values travel in a map keyed by field name, so two fields may not
+ * share one. Later duplicates get `name__2`, `name__3`, ...
+ */
+export function ensureUniqueNames(fields: FormField[]): FormField[] {
+  const used = new Set<string>()
+  return fields.map(field => {
+    if (!used.has(field.name)) {
+      used.add(field.name)
+      return field
+    }
+    let n = 2
+    while (used.has(`${field.name}__${n}`)) n++
+    const name = `${field.name}__${n}`
+    used.add(name)
+    return { ...field, name }
+  })
 }
 
 function scoreField(field: FormField): number {

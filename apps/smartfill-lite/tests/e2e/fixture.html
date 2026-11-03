@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SmartFill E2E fixture</title>
+  <style>
+    body { font: 14px system-ui, sans-serif; margin: 0; background: #f5f5f7; color: #1d1d1f; }
+    body.dark { background: #111; color: #eee; }
+    header, nav { display: flex; gap: 8px; align-items: center; padding: 10px 16px; background: #fff; border-bottom: 1px solid #ddd; }
+    main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; }
+    section, form { background: #fff; border-radius: 12px; padding: 16px; }
+    label { display: block; margin: 8px 0 4px; }
+    input:not([type=checkbox]):not([type=radio]), select, textarea, .rte { width: 100%; box-sizing: border-box; padding: 6px; }
+    .rte { min-height: 48px; border: 1px solid #ccc; border-radius: 4px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    .combo { width: 100%; text-align: left; padding: 6px; }
+    [role=listbox] { list-style: none; margin: 2px 0 0; padding: 4px; border: 1px solid #ccc; background: #fff; }
+    [role=option] { padding: 4px; cursor: pointer; }
+    .menu { position: absolute; background: #fff; border: 1px solid #ccc; padding: 4px; }
+    .hidden-step { display: none; }
+    .switch input { display: none; }
+    .switch span { display: inline-block; width: 32px; height: 18px; border-radius: 9px; background: #ccc; }
+  </style>
+</head>
+<body>
+  <header>
+    <button id="back" class="text-sm select-none" onclick="history.back()">← Back</button>
+    <button id="theme" class="theme-toggle text-sm font-light" aria-pressed="false">🌙 Theme</button>
+    <button id="account" aria-haspopup="menu" aria-expanded="false">Account ▾</button>
+    <div class="menu" id="account-menu" role="menu" hidden>
+      <div role="menuitem" id="logout" tabindex="0">Log out</div>
+    </div>
+    <button id="hamburger" class="navbar-toggler" aria-expanded="false">☰</button>
+    <input type="checkbox" id="nav-toggle" aria-label="Open navigation">
+    <select id="lang" aria-label="Language"><option value="en">English</option><option value="de">Deutsch</option></select>
+    <label class="switch"><input type="checkbox" role="switch" id="dark-switch" aria-label="Dark mode"><span></span></label>
+  </header>
+  <nav>
+    <button role="combobox" aria-haspopup="listbox" id="nav-products">Products</button>
+    <button class="date-picker update-btn" id="update">Update</button>
+    <div role="button" class="select-file text-sm" id="choose-file">Choose a file</div>
+  </nav>
+
+  <main>
+    <form id="signup" onsubmit="event.preventDefault(); window.__submitted = true">
+      <h2>Create your account</h2>
+      <label for="first">First name</label><input id="first" name="first_name">
+      <label for="last">Last name</label><input id="last" name="last_name">
+      <label>Work email <input type="email" name="email" id="email"></label>
+      <label for="phone1">Phone</label><input id="phone1" name="phone" type="tel">
+      <label for="phone2">Alternate phone</label><input id="phone2" name="phone" type="tel">
+      <label for="employees">Employees</label><input id="employees" type="numeric" name="employees">
+      <input placeholder="Company website" name="site" id="site">
+
+      <fieldset><legend>Gender</legend>
+        <label><input type="radio" name="gender" value="1"> Female</label>
+        <label><input type="radio" name="gender" value="2"> Male</label>
+        <label><input type="radio" name="gender" value="3"> Other</label>
+      </fieldset>
+
+      <div role="radiogroup" aria-label="Plan size">
+        <label><input type="radio" value="s"> Small</label>
+        <label><input type="radio" value="l"> Large</label>
+      </div>
+
+      <label id="role-label">Role</label>
+      <button type="button" class="combo" role="combobox" aria-labelledby="role-label" aria-controls="role-lb" aria-expanded="false" id="role">Select a role</button>
+      <ul role="listbox" id="role-lb" hidden>
+        <li role="option" data-value="dev">Developer</li>
+        <li role="option" data-value="qa">QA Engineer</li>
+        <li role="option" data-value="pm">Product Manager</li>
+      </ul>
+
+      <label id="team-label">Team</label>
+      <button type="button" class="combo" role="combobox" aria-labelledby="team-label" id="team"><span id="team-value">Pick a team</span></button>
+      <select aria-hidden="true" tabindex="-1" name="team" id="team-native" class="sr-only">
+        <option value=""></option><option value="core">Core</option><option value="growth">Growth</option>
+      </select>
+
+      <label for="country">Country</label>
+      <div><select id="country" name="country" style="display:none"><option value="">Select</option><option value="IN">India</option><option value="US">United States</option></select><span class="select2 select2-container" id="country-widget">Select</span></div>
+
+      <label for="about">About you</label>
+      <div class="rte" contenteditable="true" id="about" aria-label="About you"></div>
+
+      <shadow-field id="shadow"></shadow-field>
+
+      <input type="checkbox" id="terms" class="sr-only"><label for="terms">I accept the terms</label>
+      <label><input type="checkbox" name="interests" value="ai"> AI</label>
+      <label><input type="checkbox" name="interests" value="web"> Web</label>
+
+      <button type="button" aria-expanded="false" id="advanced">Advanced options ▾</button>
+      <div class="hidden-step"><label for="step2">Step 2 field</label><input id="step2" name="step2"></div>
+      <input type="text" name="website_hp" style="display:none" tabindex="-1" autocomplete="off">
+      <button type="submit" id="submit">Create account</button>
+    </form>
+
+    <section>
+      <h2>Orders</h2>
+      <label for="sort">Sort by</label>
+      <select id="sort"><option value="new">Newest</option><option value="old">Oldest</option></select>
+      <select id="jump" aria-label="Go to"><option value="/a">A</option><option value="/b">B</option><option value="/c">C</option></select>
+      <table>
+        <thead><tr><th><input type="checkbox" id="select-all" aria-label="Select all"></th><th>Order</th></tr></thead>
+        <tbody><tr><td><input type="checkbox" id="row-1"></td><td>#1001</td></tr></tbody>
+      </table>
+      <button aria-expanded="false" class="accordion-button" id="faq">FAQ</button>
+      <form id="newsletter" onsubmit="event.preventDefault()">
+        <h3>Newsletter</h3>
+        <label for="nl-email">Email</label><input id="nl-email" type="email" name="nl_email">
+      </form>
+    </section>
+  </main>
+
+  <script>
+    // Every activation of something that is not a field or a dropdown option is a bug.
+    window.__unexpectedClicks = []
+    const allowed = el => el.closest('#role, #role-lb, #team, [data-smartfill-ui]')
+    document.addEventListener('click', event => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+      if (target.closest('input, select, textarea, label, [contenteditable]')) return
+      if (allowed(target)) return
+      window.__unexpectedClicks.push(target.id || target.textContent.trim().slice(0, 20))
+    }, true)
+    document.getElementById('theme').addEventListener('click', () => document.body.classList.toggle('dark'))
+    document.getElementById('dark-switch').addEventListener('change', e => document.body.classList.toggle('dark', e.target.checked))
+    document.getElementById('account').addEventListener('click', () => { document.getElementById('account-menu').hidden = false })
+
+    // A Radix-like dropdown: opens on pointerdown, picks on click.
+    const role = document.getElementById('role')
+    const roleList = document.getElementById('role-lb')
+    role.addEventListener('pointerdown', () => { roleList.hidden = false; role.setAttribute('aria-expanded', 'true') })
+    roleList.addEventListener('click', e => {
+      const option = e.target.closest('[role=option]')
+      if (!option) return
+      role.textContent = option.textContent
+      role.dataset.value = option.dataset.value
+      roleList.hidden = true
+      role.setAttribute('aria-expanded', 'false')
+    })
+
+    // A Radix-like hidden native select that drives the trigger text.
+    const teamNative = document.getElementById('team-native')
+    teamNative.addEventListener('change', () => { document.getElementById('team-value').textContent = teamNative.selectedOptions[0].text })
+
+    customElements.define('shadow-field', class extends HTMLElement {
+      constructor() {
+        super()
+        this.attachShadow({ mode: 'open' }).innerHTML = '<label for="c">Company</label><input id="c" name="company">'
+      }
+    })
+  </script>
+  <script src="/chrome-stub.js"></script>
+  <script src="/content.js"></script>
+</body>
+</html>

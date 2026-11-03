@@ -121,3 +121,18 @@ export const ExternalIcon = (p: IconProps) => (
     <path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
   </Svg>
 )
+
+export const TargetIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3" />
+    <rect x="8" y="8" width="8" height="8" rx="1.5" />
+  </Svg>
+)
+
+export const MemoryIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 8v4l2.5 2.5" />
+    <path d="M3.05 11a9 9 0 1 1 .5 4" />
+    <path d="M3 4v4h4" />
+  </Svg>
+)

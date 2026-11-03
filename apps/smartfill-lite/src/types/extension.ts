@@ -62,6 +62,12 @@ export interface FormField {
   required: boolean
   element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
   options?: string[]
+  /** Every radio / checkbox answering this question, when it is a group. */
+  group?: HTMLInputElement[]
+  /** Custom dropdown trigger whose hidden native `<select>` is `element`. */
+  trigger?: HTMLElement
+  /** A hidden native `<select>` that select2 / Chosen / Choices draws a widget for. */
+  enhanced?: boolean
 }
 
 export interface DetectedForm {

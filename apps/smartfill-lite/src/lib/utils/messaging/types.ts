@@ -117,7 +117,10 @@ export const MESSAGE_ACTIONS = {
     DETECT: "detectForms",
     SCAN: "scanForms",
     UNDO: "undoFill",
-    PING: "ping"
+    PING: "ping",
+    PICK: "pickFormArea",
+    CLEAR_SCOPE: "clearFormScope",
+    FORGET: "forgetSavedForm"
   },
   AI: {
     COMPLETE: "aiComplete",

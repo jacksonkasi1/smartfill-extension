@@ -6,13 +6,15 @@ import type { LLMProvider, ProviderGroup } from "@/api/ai/constants"
 import type { Settings } from "@/lib/settings"
 import type { StatusState } from "@/components/Status"
 import type { EmailMode, IdentityPrefs } from "@/lib/mock"
+import type { SavedForm } from "@/lib/memory"
 
 // ** import lib
 import { activeBaseUrl, activeModel, getSettings, resetSettings, resolveVoice, saveSettings, voiceKey } from "@/lib/settings"
 import { INBOX_PROVIDERS, PROFILES, REGIONS, parseEmails } from "@/lib/mock"
 import { IDLE, Status, errorText } from "@/components/Status"
 import { useSpeech } from "@/components/useSpeech"
-import { ExternalIcon, MicIcon, RefreshIcon } from "@/components/icons"
+import { ExternalIcon, MicIcon, RefreshIcon, TrashIcon } from "@/components/icons"
+import { clearSavedForms, deleteSavedForm, listSavedForms } from "@/lib/memory"
 
 // ** import constants
 import { PROVIDERS, PROVIDER_GROUP_LABELS, PROVIDER_IDS } from "@/api/ai/constants"
@@ -407,6 +409,72 @@ function VoiceCard({ settings, update, highlight }: { settings: Settings, update
   )
 }
 
+function SavedFormsCard({ settings, update }: { settings: Settings, update: (patch: Partial<Settings>) => void }) {
+  const [forms, setForms] = useState<SavedForm[]>()
+
+  useEffect(() => {
+    const load = () => listSavedForms().then(list => setForms([...list].sort((a, b) => b.updatedAt - a.updatedAt)))
+    load()
+    // The page saves forms while this tab is open.
+    const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area === 'local' && changes.formMemory) load()
+    }
+    chrome.storage.onChanged.addListener(listener)
+    return () => chrome.storage.onChanged.removeListener(listener)
+  }, [])
+
+  async function remove(id: string) {
+    await deleteSavedForm(id)
+    setForms(current => current?.filter(f => f.id !== id))
+  }
+
+  async function clearAll() {
+    if (!confirm('Forget every saved form area?')) return
+    await clearSavedForms()
+    setForms([])
+  }
+
+  return (
+    <section className="card">
+      <div className="card-head">
+        <h2>Saved forms</h2>
+        <p>Pick a form area once from the popup. Next visit SmartFill recognizes it (85% or closer match) and fills only those fields.</p>
+      </div>
+      <label className="toggle">
+        <input type="checkbox" checked={settings.rememberForms} onChange={e => update({ rememberForms: e.target.checked })} />
+        <span className="toggle-copy">
+          Remember picked form areas
+          <small>Stores field labels, and the last filled values except passwords, card numbers and IDs, in this browser only.</small>
+        </span>
+      </label>
+      {forms && forms.length > 0 && (
+        <ul className="saved-forms">
+          {forms.map(form => (
+            <li key={form.id}>
+              <div className="saved-form-info">
+                <div className="saved-form-title" title={form.title}>{form.title}</div>
+                <div className="saved-form-meta">
+                  {form.host}{form.path !== '/' ? form.path : ''} · {form.fields.length} field{form.fields.length === 1 ? '' : 's'}
+                  {form.fillCount > 0 ? ` · filled ${form.fillCount}×` : ''} · {new Date(form.updatedAt).toLocaleDateString()}
+                </div>
+              </div>
+              <button type="button" className="small-icon" title="Forget" aria-label={`Forget ${form.title}`} onClick={() => remove(form.id)}>
+                <TrashIcon size={13} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {forms && forms.length === 0 && <p className="hint">No saved forms yet. Use “Select form area” in the popup.</p>}
+      {forms && forms.length > 1 && (
+        <div className="row">
+          <button type="button" onClick={clearAll}>Forget all</button>
+        </div>
+      )}
+    </section>
+  )
+}
+
 function Options() {
   const [settings, setSettings] = useState<Settings>()
   const [saved, setSaved] = useState(false)
@@ -530,6 +598,8 @@ function Options() {
           </button>
         </p>
       </section>
+
+      <SavedFormsCard settings={settings} update={update} />
 
       <p className="note">
         <strong>Privacy.</strong> Settings and API keys stay in this browser profile’s local extension storage and are never synced.

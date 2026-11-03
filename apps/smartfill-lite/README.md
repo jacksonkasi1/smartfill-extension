@@ -34,6 +34,32 @@ Every field is filled: text boxes, dropdowns, radio buttons, checkboxes and
 dates. Click **Generate again** for new values, or **Undo** to put the page
 back exactly as it was.
 
+SmartFill only touches form fields. It never clicks buttons, links or menus,
+and it leaves page controls alone: theme and dark-mode switches, back
+buttons, language and sort pickers, accordions and table row checkboxes.
+
+## Pick the form once, SmartFill remembers it
+
+Pages often have more than one form, or widgets next to the form. Choose
+exactly what gets filled:
+
+1. In the popup, click **Select form area**.
+2. On the page, click a form, or drag a box over the fields you want.
+   Shift+click a field to add or remove it. ↑ / ↓ widens or narrows the area.
+3. Press **Save & fill** (or **Save area**).
+
+Next time you open that page, SmartFill finds the same form by its field
+labels. If 85% or more of them match, it says **Auto-scanned from your last
+visit** and fills only that area. You choose:
+
+- **Fill same values:** continue with the values from last time.
+- **New values:** generate fresh ones.
+- **Rescan** to pick the area again, or **Whole page** to ignore it once.
+
+Saved forms are listed under **Settings → Saved forms**, where you can
+delete them or turn the feature off. Passwords, card numbers and ID numbers
+are never saved.
+
 ## Two ways to fill
 
 | | **Mock data** | **AI fill** |
@@ -164,8 +190,15 @@ cd apps/smartfill-lite
 bun run dev        # development build with live reload
 bun run build      # production build → build/chrome-mv3-prod
 bun run package    # zip for the Chrome Web Store → build/chrome-mv3-prod.zip
-bun test tests/    # unit tests
+bun test tests/    # unit + DOM tests (happy-dom)
 ```
+
+To check the production content script in a real browser, run
+`bun run build && bun tests/e2e/serve.ts` and open http://localhost:4317.
+The fixture page has a theme toggle, menus, a back button and tricky
+dropdowns around a form; in DevTools run `await smartfill('fillForms')` and
+check `window.__unexpectedClicks` stays empty. `/popup?scope=memory` shows
+the built popup with a stubbed `chrome` API.
 
 To try a build, open `chrome://extensions`, turn on **Developer mode**,
 click **Load unpacked** and choose `build/chrome-mv3-prod`.
@@ -180,7 +213,11 @@ click **Load unpacked** and choose `build/chrome-mv3-prod`.
 | `src/background.ts` | All AI requests and the keyboard shortcut |
 | `src/api/ai/` | AI providers, prompt and reply parsing |
 | `src/api/voice/` | Speech-to-text services |
-| `src/lib/mock/` | Mock data: field detection, 20 industries, regions, login presets |
+| `src/lib/detection/` | Finds fields (incl. shadow DOM) and keeps page UI out (`safety.ts`) |
+| `src/lib/filling/` | Writes values; only opens real dropdowns (`role="listbox"`) |
+| `src/lib/memory/` | Saved form areas and the 85% signature match |
+| `src/lib/picker/` | The on-page area picker and the SmartFill card |
+| `src/lib/mock/` | Mock data: field kinds, 20 industries, regions, login presets |
 | `src/lib/settings.ts` | Saved settings |
 | `store/` | Chrome Web Store images |
 | `docs/` | README images and demo GIF |

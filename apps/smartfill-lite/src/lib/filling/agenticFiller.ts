@@ -15,6 +15,7 @@ import {
   fillSelectField,
   fillRadioField,
   fillCheckboxField,
+  fillComboboxInput,
   fillCustomSelect
 } from './fieldFiller'
 
@@ -37,8 +38,8 @@ export async function fillForm(
   // Native controls fill synchronously; custom dropdowns wait for their
   // popup, so they go last and the rest of the form appears instantly.
   const ordered = [
-    ...fields.filter(f => !(f.type === 'select' && isCustomSelectElement(f.element))),
-    ...fields.filter(f => f.type === 'select' && isCustomSelectElement(f.element))
+    ...fields.filter(f => !needsPopup(f)),
+    ...fields.filter(needsPopup)
   ]
 
   for (const field of ordered) {
@@ -86,8 +87,7 @@ async function fillSingleField(
   // Only custom dropdowns get the custom retry budget. Native
   // controls (text input, textarea, checkbox, radio, native
   // <select>) must never incur the 120 ms retry gap.
-  const isCustomSelect = field.type === 'select' && isCustomSelectElement(field.element)
-  const maxAttempts = isCustomSelect ? CUSTOM_MAX_ATTEMPTS : NATIVE_MAX_ATTEMPTS
+  const maxAttempts = needsPopup(field) ? CUSTOM_MAX_ATTEMPTS : NATIVE_MAX_ATTEMPTS
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const ok = await dispatchFill(field, value)
@@ -113,20 +113,30 @@ async function dispatchFill(field: FormField, value: any): Promise<boolean> {
     case 'time':
     case 'datetime-local':
     case 'color':
-    case 'range':
-      return fillTextField(field.element as HTMLInputElement, String(value))
+    case 'range': {
+      const el = field.element
+      if (el instanceof HTMLInputElement && (el.getAttribute('role') || '').toLowerCase() === 'combobox') {
+        return fillComboboxInput(el, String(value))
+      }
+      return fillTextField(el as HTMLInputElement, String(value))
+    }
 
     // ---- textarea / contenteditable ----
     case 'textarea':
       return fillTextField(field.element as HTMLTextAreaElement, String(value))
 
-    // ---- native <select> ----
+    // ---- native <select>, or a custom dropdown ----
     case 'select': {
       const el = field.element
       if (el instanceof HTMLSelectElement) {
-        return fillSelectField(el, String(value))
+        const ok = fillSelectField(el, String(value))
+        // A Radix-style hidden <select> only updates the visible trigger
+        // when the kit listens to it; otherwise open the real dropdown.
+        if (field.trigger && (!ok || !(await triggerShows(field.trigger, el)))) {
+          return fillCustomSelect(field.trigger, String(value))
+        }
+        return ok
       }
-      // Custom dropdown detected under `type: 'select'`
       return fillCustomSelect(el as HTMLElement, String(value))
     }
 
@@ -135,7 +145,8 @@ async function dispatchFill(field: FormField, value: any): Promise<boolean> {
       return fillRadioField(
         field.element as HTMLInputElement,
         String(value),
-        field.element.closest('form') || document.body
+        field.element.closest('form') || document.body,
+        field.group
       )
 
     // ---- checkbox (single or group) ----
@@ -143,7 +154,8 @@ async function dispatchFill(field: FormField, value: any): Promise<boolean> {
       return fillCheckboxField(
         field.element as HTMLInputElement,
         value,
-        field.element.closest('form') || document.body
+        field.element.closest('form') || document.body,
+        field.group
       )
 
     // ---- anything else ----
@@ -151,37 +163,24 @@ async function dispatchFill(field: FormField, value: any): Promise<boolean> {
       return false
 
     default:
-      // Last-resort branch: if the element isn't a real input/select/textarea
-      // but our detection accepted it (e.g. div[role="textbox"]), try
-      // filling it as text.
-      if (field.element instanceof HTMLElement &&
-          (field.element.getAttribute('contenteditable') === 'true' ||
-           field.element.getAttribute('role') === 'textbox' ||
-           field.element.getAttribute('role') === 'combobox')) {
-        return fillTextField(
-          field.element as unknown as HTMLInputElement,
-          String(value)
-        )
-      }
       console.warn(`Unsupported field type: ${field.type}`)
       return false
   }
 }
 
-/**
- * Decide whether a select-typed field is a native <select> or a custom
- * dropdown. Custom dropdowns are anything that:
- *   - is not an actual HTMLSelectElement, OR
- *   - has role=combobox / listbox, OR
- *   - has aria-haspopup="listbox", OR
- *   - looks like a Material / Ant / Bootstrap dropdown trigger
- */
-function isCustomSelectElement(el: HTMLElement): boolean {
-  if (!(el instanceof HTMLSelectElement)) return true
-  const role = el.getAttribute('role')
-  if (role === 'combobox' || role === 'listbox') return true
-  if (el.getAttribute('aria-haspopup') === 'listbox') return true
-  return false
+/** Fields that have to wait for a popup, so they fill after everything else. */
+function needsPopup(field: FormField): boolean {
+  if (field.type !== 'select') return false
+  return !(field.element instanceof HTMLSelectElement) || Boolean(field.trigger)
+}
+
+/** Whether a custom trigger now displays the option chosen on its hidden native select. */
+async function triggerShows(trigger: HTMLElement, select: HTMLSelectElement): Promise<boolean> {
+  const chosen = select.selectedOptions[0]
+  const text = (chosen?.text || chosen?.value || '').trim().toLowerCase()
+  if (!text) return false
+  await sleep(30)
+  return (trigger.textContent || '').toLowerCase().includes(text)
 }
 
 function sleep(ms: number): Promise<void> {

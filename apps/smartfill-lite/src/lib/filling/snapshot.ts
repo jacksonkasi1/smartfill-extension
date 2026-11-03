@@ -23,7 +23,9 @@ export class FillSnapshot {
     const snapshot = new FillSnapshot()
     for (const field of fields) {
       const el = field.element as Control
-      if (el instanceof HTMLInputElement && (el.type === 'radio' || el.type === 'checkbox') && el.name) {
+      if (field.group?.length) {
+        field.group.forEach(input => snapshot.entries.push({ element: input, checked: input.checked }))
+      } else if (el instanceof HTMLInputElement && (el.type === 'radio' || el.type === 'checkbox') && el.name) {
         const scope = el.form || document
         scope.querySelectorAll<HTMLInputElement>(`input[type="${el.type}"][name="${CSS.escape(el.name)}"]`)
           .forEach(input => snapshot.entries.push({ element: input, checked: input.checked }))
@@ -62,7 +64,7 @@ export class FillSnapshot {
       } else {
         continue
       }
-      triggerEvents(el)
+      triggerEvents(el, entry.checked !== undefined)
       restored++
     }
     return restored

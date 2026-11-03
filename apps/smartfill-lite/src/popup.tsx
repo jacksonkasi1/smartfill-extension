@@ -17,6 +17,7 @@ import { useSpeech } from "@/components/useSpeech"
 import {
   ArrowLeftIcon,
   ChevronIcon,
+  MemoryIcon,
   MicIcon,
   PlayIcon,
   RecordIcon,
@@ -24,6 +25,7 @@ import {
   SettingsIcon,
   SparklesIcon,
   StopIcon,
+  TargetIcon,
   TrashIcon,
   UndoIcon,
   WandIcon
@@ -51,6 +53,18 @@ interface ScannedField {
   kind: string
   required: boolean
   skipped: boolean
+  inScope: boolean
+}
+
+interface ScopeSummary {
+  source: 'picked' | 'memory'
+  formId: string
+  title: string
+  persisted: boolean
+  score: number
+  fieldCount: number
+  hasValues: boolean
+  savedAt: number
 }
 
 interface ScanResult {
@@ -58,6 +72,7 @@ interface ScanResult {
   profile: ProfileId
   autoDetected: boolean
   region: Region
+  scope?: ScopeSummary
 }
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
@@ -79,33 +94,77 @@ function openOptions(hash = '') {
 // ---------------------------------------------------------------------------
 // Detected fields list
 // ---------------------------------------------------------------------------
-const FieldList = memo(function FieldList({ fields }: { fields: ScannedField[] }) {
+const FieldList = memo(function FieldList({ fields, scoped }: { fields: ScannedField[], scoped: boolean }) {
   if (fields.length === 0) return <p className="card empty">No form fields found on this page.</p>
-  const required = fields.filter(f => f.required).length
+  const inArea = fields.filter(f => f.inScope)
+  const required = inArea.filter(f => f.required).length
+  // Fields of the picked area first; the rest stay listed, dimmed, for context.
+  const ordered = scoped ? [...inArea, ...fields.filter(f => !f.inScope)] : fields
   return (
     <details className="card fields">
       <summary>
-        <span>Detected fields</span>
+        <span>{scoped ? 'Fields in area' : 'Detected fields'}</span>
         <span className="summary-value">
-          <strong>{fields.length}</strong>
+          <strong>{scoped ? `${inArea.length} of ${fields.length}` : fields.length}</strong>
           {required > 0 && <span>· {required} required</span>}
           <ChevronIcon size={14} />
         </span>
       </summary>
       <ul>
-        {fields.map((field, index) => (
-          <li key={index} className={field.skipped ? 'skipped' : undefined}>
+        {ordered.map((field, index) => (
+          <li key={index} className={field.skipped || !field.inScope ? 'skipped' : undefined}>
             <span className="name">
               {field.label}
               {field.required && <span className="required"> *</span>}
             </span>
-            <span className="kind">{field.skipped ? 'skipped' : field.kind}</span>
+            <span className="kind">{!field.inScope ? 'outside area' : field.skipped ? 'skipped' : field.kind}</span>
           </li>
         ))}
       </ul>
     </details>
   )
 })
+
+/** Which part of the page gets filled: a picked area, a recognized saved form, or everything. */
+function ScopeBar({ scope, disabled, onPick, onWholePage, onForget }: {
+  scope?: ScopeSummary
+  disabled: boolean
+  onPick: () => void
+  onWholePage: () => void
+  onForget: () => void
+}) {
+  if (!scope) {
+    return (
+      <button type="button" className="scope-pick" onClick={onPick} disabled={disabled}>
+        <TargetIcon size={15} />
+        <span className="scope-pick-copy">
+          <strong>Select form area</strong>
+          <small>Click or drag over it · remembered next visit</small>
+        </span>
+      </button>
+    )
+  }
+  const recognized = scope.source === 'memory'
+  return (
+    <div className={`scope-bar${recognized ? ' recognized' : ''}`} role="status">
+      <span className="scope-icon">{recognized ? <MemoryIcon size={15} /> : <TargetIcon size={15} />}</span>
+      <span className="scope-copy">
+        <strong>{recognized ? 'Auto-scanned from last visit' : 'Area selected'}</strong>
+        <small title={scope.title}>{scope.title}</small>
+        <small>{plural(scope.fieldCount, 'field')}{recognized ? ` · ${scope.score}% match` : ''}</small>
+        <span className="scope-actions">
+          <button type="button" className="link" onClick={onPick} disabled={disabled} title="Pick the area again">Rescan</button>
+          <button type="button" className="link" onClick={onWholePage} disabled={disabled} title="Fill every field on the page this time">Whole page</button>
+        </span>
+      </span>
+      {scope.persisted && (
+        <button type="button" className="small-icon ghost" onClick={onForget} disabled={disabled} title="Forget this saved form" aria-label="Forget this saved form">
+          <TrashIcon size={12} />
+        </button>
+      )}
+    </div>
+  )
+}
 
 // ---------------------------------------------------------------------------
 // Recorder (record and replay interactions on the current site)
@@ -261,15 +320,22 @@ function Popup() {
     if (refresh) rescan()
   }
 
-  async function fill(regenerate: boolean) {
+  async function fill(regenerate: boolean, reuse = false) {
     if (!tab || !settings || busy) return
     if (regenerate) seed.current = newSeed()
     setBusy(regenerate ? 'regenerate' : 'fill')
-    showStatus({ tone: 'loading', message: settings.mode === 'ai' ? 'AI is writing values…' : 'Filling mock data…' })
+    showStatus({
+      tone: 'loading',
+      message: reuse ? 'Filling your saved values…' : settings.mode === 'ai' ? 'AI is writing values…' : 'Filling mock data…'
+    })
     try {
-      const res = await sendToTab(tab.id, { action: MESSAGE_ACTIONS.FORMS.FILL, seed: seed.current })
+      // Continuing with saved values uses the saved seed, so leave it to the page.
+      const res = await sendToTab(tab.id, { action: MESSAGE_ACTIONS.FORMS.FILL, seed: reuse ? undefined : seed.current, reuse })
       if (!res?.success) throw new Error(res?.errors?.[0] || res?.error || 'Nothing was filled.')
-      const summary = `Filled ${res.filled} of ${plural(res.total, 'field')} · ${PROFILE_MAP[res.profile as ProfileId]?.name ?? ''}`
+      if (res.scope) setScan(current => (current ? { ...current, scope: res.scope } : current))
+      const where = res.scope ? ` in ${res.scope.source === 'memory' ? 'saved form' : 'area'}` : ''
+      const reused = res.reused ? ` · ${res.reused} continued` : ''
+      const summary = `Filled ${res.filled} of ${plural(res.total, 'field')}${where}${reused} · ${PROFILE_MAP[res.profile as ProfileId]?.name ?? ''}`
       if (res.warning) {
         showStatus({ tone: 'warning', message: `${summary}. ${res.warning}` })
         if (!isAIReady(settings)) setStatusAction({ label: 'Set up AI', onClick: () => openOptions() })
@@ -300,10 +366,39 @@ function Popup() {
     }
   }
 
+  async function pickArea() {
+    if (!tab || busy) return
+    try {
+      const res = await sendToTab(tab.id, { action: MESSAGE_ACTIONS.FORMS.PICK })
+      if (!res?.success) throw new Error(res?.error || 'Could not start the picker.')
+      // The picker lives on the page; the popup would cover it.
+      window.close()
+    } catch (error) {
+      showStatus({ tone: 'error', message: errorText(error) })
+    }
+  }
+
+  async function wholePage() {
+    if (!tab) return
+    await sendToTab(tab.id, { action: MESSAGE_ACTIONS.FORMS.CLEAR_SCOPE }).catch(() => undefined)
+    await rescan()
+    showStatus({ tone: 'success', message: 'Filling the whole page this time.' })
+  }
+
+  async function forget() {
+    if (!tab || !scan?.scope) return
+    await sendToTab(tab.id, { action: MESSAGE_ACTIONS.FORMS.FORGET, formId: scan.scope.formId }).catch(() => undefined)
+    await rescan()
+    showStatus({ tone: 'success', message: 'Saved form removed.' })
+  }
+
   const mode: FillMode = settings?.mode ?? 'mock'
   const aiReady = settings ? isAIReady(settings) : false
   const disabled = !tab || !settings || tab.restricted || Boolean(busy)
   const detectedName = scan ? PROFILE_MAP[scan.profile]?.name : undefined
+  const scope = scan?.scope
+  // A recognized form filled before can continue with the same values.
+  const canContinue = Boolean(scope?.hasValues)
 
   return (
     <main className="popup">
@@ -397,24 +492,29 @@ function Popup() {
             </div>
           )}
 
+          {tab && !tab.restricted && scan && scan.fields.length > 0 && (
+            <ScopeBar scope={scope} disabled={disabled} onPick={pickArea} onWholePage={wholePage} onForget={forget} />
+          )}
+
           <button
             type="button"
             className={`primary fill-button${busy === 'fill' || busy === 'regenerate' ? ' busy' : ''}`}
             onClick={async () => {
               if (settings) await saveSettings({ instructions: settings.instructions })
-              fill(false)
+              fill(false, canContinue)
             }}
+            title={canContinue ? 'Continue with the values SmartFill filled last time' : undefined}
             disabled={disabled}>
             {busy === 'fill' || busy === 'regenerate'
               ? <span className="spinner" aria-hidden="true" />
-              : mode === 'ai' ? <SparklesIcon size={17} /> : <WandIcon size={17} />}
-            {mode === 'ai' ? 'Fill with AI' : 'Fill form'}
+              : canContinue ? <MemoryIcon size={17} /> : mode === 'ai' ? <SparklesIcon size={17} /> : <WandIcon size={17} />}
+            {canContinue ? 'Fill same values' : mode === 'ai' ? 'Fill with AI' : 'Fill form'}
           </button>
 
           <div className="secondary-actions">
             <button type="button" className="link" onClick={() => fill(true)} disabled={disabled}>
               <RefreshIcon size={13} />
-              Generate again
+              {canContinue ? (mode === 'ai' ? 'New AI values' : 'New values') : 'Generate again'}
             </button>
             <span className="divider" aria-hidden="true" />
             <button type="button" className="link" onClick={undo} disabled={disabled || !canUndo}>
@@ -427,7 +527,7 @@ function Popup() {
 
       <Status status={status} action={statusAction} />
 
-      {view === 'fill' && scan && <FieldList fields={scan.fields} />}
+      {view === 'fill' && scan && <FieldList fields={scan.fields} scoped={Boolean(scan.scope)} />}
 
       <footer className="footer">
         <button type="button" className={`ai-status${aiReady ? ' on' : ''}`} onClick={() => openOptions()}>

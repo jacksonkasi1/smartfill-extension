@@ -36,6 +36,8 @@ export interface Settings {
   keepExisting: boolean
   /** Default OFF — see parser.ts for what the protection layer does. */
   safeFillingMode: boolean
+  /** Save picked form areas and recognize them on later visits. */
+  rememberForms: boolean
   /** Fixed password and email strategy used by both mock and AI fills. */
   identity: IdentityPrefs
   voice: VoiceSettings
@@ -52,6 +54,7 @@ export const DEFAULT_SETTINGS: Settings = {
   baseUrls: {},
   keepExisting: false,
   safeFillingMode: false,
+  rememberForms: true,
   identity: DEFAULT_IDENTITY,
   voice: { provider: 'auto', apiKeys: {}, models: {}, customBaseUrl: '' }
 }
