@@ -1,0 +1,105 @@
+/** Canonical theme source. Run node scripts/generate-theme.mjs after editing. */
+export const themeCss = String.raw`
+:root {
+  --background: #fafafa;
+  --foreground: #0a0a0a;
+  --card: #ffffff;
+  --card-foreground: #0a0a0a;
+  --popover: #ffffff;
+  --popover-foreground: #0a0a0a;
+  --primary: #171717;
+  --primary-foreground: #fafafa;
+  --primary-hover: #303030;
+  --secondary: #f1f1f1;
+  --secondary-foreground: #171717;
+  --muted: #f1f1f1;
+  --muted-foreground: #595959;
+  --accent: #ebebeb;
+  --accent-foreground: #0a0a0a;
+  --destructive: #b42332;
+  --border: #e5e5e5;
+  --input: #e5e5e5;
+  --ring: #a3a3a3;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0a0a0a;
+  --sidebar-accent: #ededed;
+  --sidebar-accent-foreground: #0a0a0a;
+  --sidebar-border: #e5e5e5;
+  --page: var(--background);
+  --bg: var(--card);
+  --surface: var(--muted);
+  --surface-2: var(--accent);
+  --border-strong: #d4d4d4;
+  --text: var(--foreground);
+  --faint: #737373;
+  --primary-soft: var(--muted);
+  --primary-text: var(--primary-foreground);
+  --success: #246947;
+  --success-bg: #eef6f0;
+  --success-dot: #34825b;
+  --warning: #8b5a13;
+  --warning-bg: #fbf4e8;
+  --error: var(--destructive);
+  --error-bg: #fceff0;
+  --shadow: 0 0 0 1px rgb(0 0 0 / 5%), 0 1px 2px rgb(0 0 0 / 4%), 0 3px 8px rgb(0 0 0 / 3%);
+  --shadow-popover: 0 0 0 1px rgb(0 0 0 / 6%), 0 2px 4px -1px rgb(0 0 0 / 6%), 0 12px 32px -8px rgb(0 0 0 / 14%);
+  --shadow-control: 0 0 0 1px rgb(0 0 0 / 4%), 0 1px 3px rgb(0 0 0 / 10%);
+  --radius: 20px;
+  --radius-panel: 16px;
+  --radius-control: 12px;
+  --radius-row: 10px;
+  --radius-pill: 999px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --control-height: 36px;
+  --font-body: 14px;
+  --font-small: 12px;
+  --font-family: 'SmartFill Geist', Arial, sans-serif;
+  color-scheme: light;
+}
+/* Dark tokens are explicit opt-in; system dark mode must not change the default. */
+:root[data-theme="dark"] {
+    --background: #171717;
+    --foreground: #fafafa;
+    --card: #202020;
+    --card-foreground: #fafafa;
+    --popover: #262626;
+    --popover-foreground: #fafafa;
+    --primary: #f5f5f5;
+    --primary-foreground: #171717;
+    --primary-hover: #dedede;
+    --secondary: #2c2c2c;
+    --secondary-foreground: #fafafa;
+    --muted: #2c2c2c;
+    --muted-foreground: #b5b5b5;
+    --accent: #353535;
+    --accent-foreground: #fafafa;
+    --destructive: #f3a0a8;
+    --border: #353535;
+    --input: #3a3a3a;
+    --ring: #737373;
+    --sidebar: #202020;
+    --sidebar-foreground: #fafafa;
+    --sidebar-accent: #303030;
+    --sidebar-accent-foreground: #fafafa;
+    --sidebar-border: #353535;
+    --border-strong: #4a4a4a;
+    --faint: #a3a3a3;
+    --success: #9cceaf;
+    --success-bg: #23342a;
+    --success-dot: #9cceaf;
+    --warning: #e0bd86;
+    --warning-bg: #372f22;
+    --error-bg: #3b2629;
+    --shadow: 0 0 0 1px rgb(255 255 255 / 7%), 0 2px 4px rgb(0 0 0 / 12%);
+    --shadow-popover: 0 0 0 1px rgb(255 255 255 / 10%), 0 12px 32px -8px rgb(0 0 0 / 50%);
+    --shadow-control: 0 0 0 1px rgb(255 255 255 / 6%), 0 1px 3px rgb(0 0 0 / 20%);
+    color-scheme: dark;
+}
+`
+export const overlayThemeCss = themeCss.replace(/:root/g, '.sf-root')

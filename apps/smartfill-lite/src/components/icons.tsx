@@ -66,25 +66,6 @@ export const MicIcon = (p: IconProps) => (
   </Svg>
 )
 
-export const RecordIcon = (p: IconProps) => (
-  <Svg {...p}>
-    <circle cx="12" cy="12" r="9" />
-    <circle cx="12" cy="12" r="3.5" fill="currentColor" />
-  </Svg>
-)
-
-export const StopIcon = (p: IconProps) => (
-  <Svg {...p}>
-    <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" />
-  </Svg>
-)
-
-export const PlayIcon = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M7 4l13 8-13 8z" fill="currentColor" />
-  </Svg>
-)
-
 export const TrashIcon = (p: IconProps) => (
   <Svg {...p}>
     <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
@@ -94,12 +75,6 @@ export const TrashIcon = (p: IconProps) => (
 export const ChevronIcon = (p: IconProps) => (
   <Svg {...p}>
     <path d="M9 6l6 6-6 6" />
-  </Svg>
-)
-
-export const ArrowLeftIcon = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M19 12H5M12 19l-7-7 7-7" />
   </Svg>
 )
 
@@ -119,5 +94,33 @@ export const AlertIcon = (p: IconProps) => (
 export const ExternalIcon = (p: IconProps) => (
   <Svg {...p}>
     <path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
+  </Svg>
+)
+
+export const TargetIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3" />
+    <rect x="8" y="8" width="8" height="8" rx="1.5" />
+  </Svg>
+)
+
+export const MemoryIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 8v4l2.5 2.5" />
+    <path d="M3.05 11a9 9 0 1 1 .5 4" />
+    <path d="M3 4v4h4" />
+  </Svg>
+)
+
+export const PinIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 17v5" />
+    <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />
+  </Svg>
+)
+
+export const PencilIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
   </Svg>
 )

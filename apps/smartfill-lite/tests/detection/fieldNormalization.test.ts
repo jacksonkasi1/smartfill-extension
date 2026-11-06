@@ -21,13 +21,21 @@ function field(overrides: Partial<FormField>): FormField {
 }
 
 describe('normalizeFormFields', () => {
-  test('keeps one canonical candidate for repeated exact names', () => {
+  test('keeps one canonical candidate for the same control rendered twice (same id)', () => {
     const result = normalizeFormFields([
-      field({ id: 'businessName', name: 'businessName', label: 'Business Name' }),
-      field({ id: 'businessName', name: 'businessName', label: 'Business Name', placeholder: 'Acme Ltd' })
+      field({ id: 'businessName', name: 'businessName', label: 'Business Name', element: element({ id: 'businessName' }) }),
+      field({ id: 'businessName', name: 'businessName', label: 'Business Name', placeholder: 'Acme Ltd', element: element({ id: 'businessName' }) })
     ])
     expect(result.fields).toHaveLength(1)
     expect(result.fields[0].placeholder).toBe('Acme Ltd')
+  })
+
+  test('same-name inputs without ids stay separate fields', () => {
+    const result = normalizeFormFields([
+      field({ id: 'phone', name: 'phone', placeholder: 'Billing phone' }),
+      field({ id: 'phone', name: 'phone', placeholder: 'Shipping phone' })
+    ])
+    expect(result.fields.map(f => f.name)).toEqual(['phone', 'phone__2'])
   })
 
   test('prefers the named select with options over a generated Radix trigger', () => {
