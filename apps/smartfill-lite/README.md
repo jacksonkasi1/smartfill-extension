@@ -56,8 +56,12 @@ visit** and fills only that area. You choose:
 - **New values:** generate fresh ones.
 - **Rescan** to pick the area again, or **Whole page** to ignore it once.
 
-Saved forms are listed under **Settings → Saved forms**, where you can
-delete them or turn the feature off. Passwords, card numbers and ID numbers
+Saved forms are listed under **Settings → Saved forms**. Open one to see
+and edit its saved values, for example to use your own name or email. A
+value you edit is **pinned**: it is used on every fill of that form, **New
+values** included, and a fill never overwrites it. Clear it, or click the
+pin, to let SmartFill generate it again. You can also rename or delete a
+form there, or turn the feature off. Passwords, card numbers and ID numbers
 are never saved.
 
 ## Two ways to fill
@@ -163,7 +167,6 @@ Mistral, Together or Fireworks key for AI fill, voice reuses it.
 - **Keep my values:** only fill empty fields.
 - **Safe Filling Mode:** leave passwords, ID numbers and card fields blank,
   and leave "I agree" boxes unticked.
-- **Record & replay:** record clicks and typing on a site, then replay them.
 
 ## Privacy
 

@@ -1,5 +1,10 @@
+// ** import lib
+import { installPageTheme } from '@/lib/picker/themeSync'
+
 // ** import constants
 import { MESSAGE_ACTIONS } from './messaging/types'
+import { OVERLAY_CSS } from '@/lib/picker/styles'
+import { geistFontData } from '@/styles/font-data'
 
 const RESTRICTED_URL = /^(chrome|edge|brave|about|devtools|view-source|chrome-extension|moz-extension):|^https:\/\/chrome(webstore)?\.google\.com\/webstore|^https:\/\/chromewebstore\.google\.com/
 
@@ -27,5 +32,12 @@ export async function ensureContentScript(tabId: number): Promise<void> {
 /** Send a message to the tab's content script, injecting it first when needed. */
 export async function sendToTab<T = any>(tabId: number, message: Record<string, unknown>): Promise<T> {
   await ensureContentScript(tabId)
+  // A successful ping can come from an older content script. Refresh its UI
+  // styles without injecting duplicate message listeners or losing Undo state.
+  await chrome.scripting.executeScript({
+    target: { tabId, allFrames: false },
+    func: installPageTheme,
+    args: [OVERLAY_CSS, geistFontData]
+  })
   return chrome.tabs.sendMessage(tabId, message)
 }

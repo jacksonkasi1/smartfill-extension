@@ -4,8 +4,8 @@
   "version": "1.3.0",
   "description": "SmartFill: one-click form filler. Autofill any form with realistic test data for 20 industries, or with AI (OpenAI, Claude, Gemini).",
   "scripts": {
-    "dev": "plasmo dev",
-    "build": "plasmo build",
+    "dev": "node scripts/generate-theme.mjs && plasmo dev",
+    "build": "node scripts/generate-theme.mjs && plasmo build",
     "package": "plasmo package",
     "typecheck": "tsc --noEmit",
     "test": "bun test tests/"

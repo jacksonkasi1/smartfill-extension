@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "skills": {
+    "bootstrap-agents-md": {
+      "source": "aisdkagents.com",
+      "sourceUrl": "https://www.aisdkagents.com/skill/bootstrap-agents-md",
+      "sourceType": "well-known",
+      "computedHash": "cfc25d31bf0173456ca9bdb16ef0089decd2168adee4a74a34dd502f646b1135",
+      "wellKnownDigest": "sha256:d704e8dea50a8e71e3f433779404204a2cbe20f4d4cde6b5696fc9470e0c4da6"
+    },
+    "design-md": {
+      "source": "aisdkagents.com",
+      "sourceUrl": "https://www.aisdkagents.com/skill/design-md",
+      "sourceType": "well-known",
+      "computedHash": "d4751a81ccae3f07a8a43de484bba914b5355fd9cb2744a8dfb01029fcc1f8e5",
+      "wellKnownDigest": "sha256:ec4617b102508f2d000ec27f5e9f43d235c2e335368258ea3286673bc8a5f624"
+    },
+    "setup": {
+      "source": "aisdkagents.com",
+      "sourceUrl": "https://www.aisdkagents.com/skill/setup",
+      "sourceType": "well-known",
+      "computedHash": "4e68d8b9358398a9de92b37fd52e2d3ded6dc4db270620abedfd0294a2910742",
+      "wellKnownDigest": "sha256:e9d399c60cba6eae81e3b0504bec385817e60a4e9e3fed25e158939638af5940"
+    }
+  }
+}

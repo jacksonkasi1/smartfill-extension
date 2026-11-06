@@ -90,3 +90,48 @@ describe('bestFormMatch', () => {
     expect(bestFormMatch([billing, saved(SIGNUP)], page, '/signup')!.form.id).toBe('f1')
   })
 })
+
+describe('editing saved values', () => {
+  const form = () => saved(SIGNUP.slice(0, 3).concat(sig('password', 'password')), {
+    values: ['Maya', 'Patel', 'maya@example.com', null]
+  })
+
+  test('an edited value is stored and pinned', async () => {
+    const { editSavedValue, isPinned } = await import('../../src/lib/memory')
+    const f = form()
+    const patch = editSavedValue(f, 2, 'me@company.test')
+    expect(patch.values).toEqual(['Maya', 'Patel', 'me@company.test', null])
+    expect(patch.pinned).toEqual([false, false, true, false])
+    expect(isPinned({ ...f, ...patch }, 2)).toBe(true)
+  })
+
+  test('clearing a value unpins it so fills generate it again', async () => {
+    const { editSavedValue } = await import('../../src/lib/memory')
+    const f = { ...form(), pinned: [true, false, false, false] }
+    const patch = editSavedValue(f, 0, '')
+    expect(patch.values![0]).toBeNull()
+    expect(patch.pinned![0]).toBe(false)
+  })
+
+  test('password and file slots can never be given a value', async () => {
+    const { editSavedValue } = await import('../../src/lib/memory')
+    const patch = editSavedValue(form(), 3, 'hunter2')
+    expect(patch.values![3]).toBeNull()
+    expect(patch.pinned![3]).toBe(false)
+  })
+
+  test('older forms without a values array get one sized to their fields', async () => {
+    const { editSavedValue } = await import('../../src/lib/memory')
+    const patch = editSavedValue(saved(SIGNUP.slice(0, 2)), 1, 'Smith')
+    expect(patch.values).toEqual([null, 'Smith'])
+    expect(patch.pinned).toEqual([false, true])
+  })
+
+  test('pin toggles keep the value, and empty slots cannot be pinned', async () => {
+    const { setValuePinned } = await import('../../src/lib/memory')
+    const f = { ...form(), values: ['Maya', null, 'maya@example.com', null] }
+    expect(setValuePinned(f, 0, true).pinned).toEqual([true, false, false, false])
+    expect(setValuePinned(f, 1, true).pinned).toEqual([false, false, false, false])
+    expect(setValuePinned({ ...f, pinned: [true, false, true, false] }, 2, false).pinned).toEqual([true, false, false, false])
+  })
+})

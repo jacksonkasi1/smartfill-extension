@@ -10,21 +10,18 @@ import type { StatusState } from "@/components/Status"
 import { isRestrictedUrl, sendToTab } from "@/lib/utils/tabs"
 
 // ** import lib
-import { activeModel, getSettings, isAIReady, resolveVoice, saveSettings } from "@/lib/settings"
+import { getSettings, isAIReady, resolveVoice, saveSettings } from "@/lib/settings"
 import { PROFILES, PROFILE_MAP, REGIONS, newSeed } from "@/lib/mock"
 import { IDLE, Status, errorText } from "@/components/Status"
 import { useSpeech } from "@/components/useSpeech"
+import { Button, Field, IconButton, SelectPicker } from "@/components/ui"
 import {
-  ArrowLeftIcon,
   ChevronIcon,
   MemoryIcon,
   MicIcon,
-  PlayIcon,
-  RecordIcon,
   RefreshIcon,
   SettingsIcon,
   SparklesIcon,
-  StopIcon,
   TargetIcon,
   TrashIcon,
   UndoIcon,
@@ -32,7 +29,6 @@ import {
 } from "@/components/icons"
 
 // ** import constants
-import { PROVIDERS } from "@/api/ai/constants"
 import { MESSAGE_ACTIONS } from "@/lib/utils/messaging/types"
 
 // ** import styles
@@ -135,13 +131,13 @@ function ScopeBar({ scope, disabled, onPick, onWholePage, onForget }: {
 }) {
   if (!scope) {
     return (
-      <button type="button" className="scope-pick" onClick={onPick} disabled={disabled}>
+      <Button className="scope-pick" onClick={onPick} disabled={disabled}>
         <TargetIcon size={15} />
         <span className="scope-pick-copy">
           <strong>Select form area</strong>
-          <small>Click or drag over it · remembered next visit</small>
+          <small>Choose specific fields on this page</small>
         </span>
-      </button>
+      </Button>
     )
   }
   const recognized = scope.source === 'memory'
@@ -149,113 +145,33 @@ function ScopeBar({ scope, disabled, onPick, onWholePage, onForget }: {
     <div className={`scope-bar${recognized ? ' recognized' : ''}`} role="status">
       <span className="scope-icon">{recognized ? <MemoryIcon size={15} /> : <TargetIcon size={15} />}</span>
       <span className="scope-copy">
-        <strong>{recognized ? 'Auto-scanned from last visit' : 'Area selected'}</strong>
+        <strong>{recognized ? 'Saved form recognized' : 'Area selected'}</strong>
         <small title={scope.title}>{scope.title}</small>
         <small>{plural(scope.fieldCount, 'field')}{recognized ? ` · ${scope.score}% match` : ''}</small>
         <span className="scope-actions">
-          <button type="button" className="link" onClick={onPick} disabled={disabled} title="Pick the area again">Rescan</button>
-          <button type="button" className="link" onClick={onWholePage} disabled={disabled} title="Fill every field on the page this time">Whole page</button>
+          <Button variant="ghost" size="sm" className="link" onClick={onPick} disabled={disabled} title="Pick the area again">Rescan</Button>
+          <Button variant="ghost" size="sm" className="link" onClick={onWholePage} disabled={disabled} title="Fill every field on the page this time">Whole page</Button>
         </span>
       </span>
       {scope.persisted && (
-        <button type="button" className="small-icon ghost" onClick={onForget} disabled={disabled} title="Forget this saved form" aria-label="Forget this saved form">
+        <IconButton className="small-icon ghost" onClick={onForget} disabled={disabled} title="Forget this saved form" aria-label="Forget this saved form">
           <TrashIcon size={12} />
-        </button>
+        </IconButton>
       )}
     </div>
   )
 }
 
-// ---------------------------------------------------------------------------
-// Recorder (record and replay interactions on the current site)
-// ---------------------------------------------------------------------------
-function Recorder({ tab, onStatus }: { tab: ActiveTab, onStatus: (s: StatusState) => void }) {
-  const [recording, setRecording] = useState(false)
-  const [sessions, setSessions] = useState<any[]>([])
-
-  async function loadSessions() {
-    const { recordingSessions = [], recordingState } = await chrome.storage.local.get(['recordingSessions', 'recordingState'])
-    setSessions(recordingSessions.filter((s: any) => s.domain === tab.host.split(':')[0]))
-    setRecording(Boolean(recordingState?.isRecording))
-  }
-
-  useEffect(() => { loadSessions() }, [])
-
-  async function run(action: string, extra: Record<string, unknown> = {}) {
-    try {
-      const res = await sendToTab(tab.id, { action, ...extra })
-      if (!res?.success) throw new Error(res?.error || 'Action failed.')
-      return true
-    } catch (error) {
-      onStatus({ tone: 'error', message: errorText(error) })
-      return false
-    }
-  }
-
-  async function toggle() {
-    if (recording) {
-      if (await run(MESSAGE_ACTIONS.RECORDING.STOP)) onStatus({ tone: 'success', message: 'Session saved.' })
-    } else if (await run(MESSAGE_ACTIONS.RECORDING.START)) {
-      onStatus({ tone: 'loading', message: 'Recording… interact with the page, then stop.' })
-    }
-    loadSessions()
-  }
-
-  async function play(id: string) {
-    onStatus({ tone: 'loading', message: 'Replaying session…' })
-    if (await run(MESSAGE_ACTIONS.RECORDING.PLAY, { sessionId: id })) onStatus({ tone: 'success', message: 'Replay finished.' })
-  }
-
-  async function remove(id: string) {
-    const { recordingSessions = [] } = await chrome.storage.local.get('recordingSessions')
-    await chrome.storage.local.set({ recordingSessions: recordingSessions.filter((s: any) => s.id !== id) })
-    loadSessions()
-  }
-
-  return (
-    <section className="card recorder">
-      <div className="recorder-state">
-        <span className={`rec-dot${recording ? ' on' : ''}`} />
-        {recording ? 'Recording in progress' : 'Record clicks and typing, replay later'}
-      </div>
-      <button type="button" className={`record-button${recording ? ' stop' : ''}`} onClick={toggle} disabled={tab.restricted}>
-        {recording ? <StopIcon size={14} /> : <RecordIcon size={15} />}
-        {recording ? 'Stop & save' : 'Start recording'}
-      </button>
-      {sessions.length > 0 && (
-        <ul className="sessions">
-          {sessions.map(session => (
-            <li key={session.id}>
-              <div className="session-info">
-                <div className="session-name">{session.name}</div>
-                <div className="session-meta">{plural(session.steps?.length || 0, 'step')}</div>
-              </div>
-              <button type="button" className="small-icon" title="Replay" aria-label="Replay" onClick={() => play(session.id)}>
-                <PlayIcon size={12} />
-              </button>
-              <button type="button" className="small-icon" title="Delete" aria-label="Delete" onClick={() => remove(session.id)}>
-                <TrashIcon size={13} />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Popup
-// ---------------------------------------------------------------------------
 function Popup() {
   const [tab, setTab] = useState<ActiveTab>()
   const [settings, setSettings] = useState<Settings>()
   const [scan, setScan] = useState<ScanResult>()
+  const [scanning, setScanning] = useState(true)
+  const [scanFailed, setScanFailed] = useState(false)
   const [status, setStatus] = useState<StatusState>(IDLE)
   const [statusAction, setStatusAction] = useState<{ label: string, onClick: () => void }>()
   const [busy, setBusy] = useState<'fill' | 'regenerate' | 'undo'>()
   const [canUndo, setCanUndo] = useState(false)
-  const [view, setView] = useState<'fill' | 'record'>('fill')
   const [shortcut, setShortcut] = useState<string[]>([])
   const seed = useRef(newSeed())
 
@@ -274,8 +190,12 @@ function Popup() {
         setTab(activeTab)
         setSettings(saved)
         if (!activeTab.restricted) await rescan(activeTab)
+        else setScanning(false)
       } catch (error) {
-        if (!cancelled) setStatus({ tone: 'error', message: errorText(error) })
+        if (!cancelled) {
+          setScanning(false)
+          setStatus({ tone: 'error', message: errorText(error) })
+        }
       }
     })()
     chrome.commands?.getAll?.().then(commands => {
@@ -299,11 +219,16 @@ function Popup() {
 
   async function rescan(target = tab) {
     if (!target || target.restricted) return
+    setScanning(true)
+    setScanFailed(false)
     try {
       const res = await sendToTab<ScanResult & { success: boolean }>(target.id, { action: MESSAGE_ACTIONS.FORMS.SCAN })
       if (res?.success) setScan(res)
+      else setScanFailed(true)
     } catch {
-      // Pages that block script injection still let the user open settings.
+      setScanFailed(true)
+    } finally {
+      setScanning(false)
     }
   }
 
@@ -316,8 +241,12 @@ function Popup() {
   async function update(patch: Partial<Settings>, refresh = false) {
     if (!settings) return
     setSettings({ ...settings, ...patch })
-    await saveSettings(patch)
-    if (refresh) rescan()
+    try {
+      await saveSettings(patch)
+      if (refresh) rescan()
+    } catch (error) {
+      showStatus({ tone: 'error', message: `Could not save settings. ${errorText(error)}` })
+    }
   }
 
   async function fill(regenerate: boolean, reuse = false) {
@@ -338,7 +267,7 @@ function Popup() {
       const summary = `Filled ${res.filled} of ${plural(res.total, 'field')}${where}${reused} · ${PROFILE_MAP[res.profile as ProfileId]?.name ?? ''}`
       if (res.warning) {
         showStatus({ tone: 'warning', message: `${summary}. ${res.warning}` })
-        if (!isAIReady(settings)) setStatusAction({ label: 'Set up AI', onClick: () => openOptions() })
+        if (!isAIReady(settings)) setStatusAction({ label: 'Set up AI', onClick: () => openOptions('#ai') })
       } else {
         showStatus({ tone: 'success', message: res.inbox ? `${summary} · ${res.inbox.email}` : `${summary}.` })
         if (res.inbox) setStatusAction({ label: 'Open inbox', onClick: () => chrome.tabs.create({ url: res.inbox.url }) })
@@ -394,7 +323,8 @@ function Popup() {
 
   const mode: FillMode = settings?.mode ?? 'mock'
   const aiReady = settings ? isAIReady(settings) : false
-  const disabled = !tab || !settings || tab.restricted || Boolean(busy)
+  const actionDisabled = !tab || !settings || tab.restricted || Boolean(busy)
+  const disabled = actionDisabled || scanning || scanFailed || scan?.fields.length === 0
   const detectedName = scan ? PROFILE_MAP[scan.profile]?.name : undefined
   const scope = scan?.scope
   // A recognized form filled before can continue with the same values.
@@ -403,41 +333,39 @@ function Popup() {
   return (
     <main className="popup">
       <header className="header">
-        <img className="logo" src={iconUrl} alt="" width={36} height={36} />
+        <img className="logo" src={iconUrl} alt="" width={32} height={32} />
         <div className="title">
           <h1>SmartFill</h1>
           <p className="site" title={tab?.host}>{tab ? tab.host : 'Detecting page…'}</p>
         </div>
-        <button
-          type="button"
-          className={`icon-button${view === 'record' ? ' active' : ''}`}
-          onClick={() => setView(view === 'fill' ? 'record' : 'fill')}
-          title={view === 'fill' ? 'Record & replay' : 'Back to fill'}
-          aria-label={view === 'fill' ? 'Record and replay' : 'Back to fill'}>
-          {view === 'fill' ? <RecordIcon size={15} /> : <ArrowLeftIcon size={15} />}
-        </button>
-        <button type="button" className="icon-button" onClick={() => openOptions()} title="Settings" aria-label="Settings">
+        <IconButton className="icon-button" onClick={() => openOptions()} title="Settings" aria-label="Settings">
           <SettingsIcon size={16} />
-        </button>
+        </IconButton>
       </header>
 
       {tab?.restricted && (
         <Status status={{ tone: 'warning', message: 'Browser pages can’t be filled. Open a website with a form.' }} />
       )}
 
-      {view === 'record' && tab ? (
-        <Recorder tab={tab} onStatus={showStatus} />
-      ) : (
-        <section className="card hero">
-          <div className="segmented" role="radiogroup" aria-label="Fill mode">
+      <div className="segmented" role="radiogroup" aria-label="Fill mode">
             {(['mock', 'ai'] as FillMode[]).map(m => (
               <button
                 key={m}
                 type="button"
                 role="radio"
                 aria-checked={mode === m}
+                tabIndex={mode === m ? 0 : -1}
                 className={mode === m ? 'active' : undefined}
-                disabled={!settings}
+                disabled={!settings || Boolean(busy)}
+                onKeyDown={event => {
+                  if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return
+                  event.preventDefault()
+                  const next: FillMode = event.key === 'Home' ? 'mock' : event.key === 'End' ? 'ai' : m === 'mock' ? 'ai' : 'mock'
+                  const group = event.currentTarget.parentElement
+                  update({ mode: next })
+                  const buttons = group?.querySelectorAll<HTMLButtonElement>('button')
+                  buttons?.[next === 'mock' ? 0 : 1]?.focus()
+                }}
                 onClick={() => update({ mode: m })}>
                 {m === 'mock' ? <WandIcon size={13} /> : <SparklesIcon size={13} />}
                 {m === 'mock' ? 'Mock data' : 'AI fill'}
@@ -445,23 +373,27 @@ function Popup() {
             ))}
           </div>
 
+        <section className="card hero">
           <div className="pickers">
-            <select
+            <div className="picker-field">
+            <span className="picker-label">Industry</span>
+            <SelectPicker
               aria-label="Industry profile"
               value={settings?.profile ?? 'auto'}
-              disabled={!settings}
-              onChange={e => update({ profile: e.target.value as Settings['profile'] }, true)}>
-              <option value="auto">Auto-detect industry</option>
-              {PROFILES.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-            <select
+              disabled={!settings || Boolean(busy)}
+              searchable
+              options={[{ value: 'auto', label: 'Auto-detect', description: 'Choose from the page', group: 'Automatic' }, ...PROFILES.map(p => ({ value: p.id, label: p.name, group: 'Industries' }))]}
+              onChange={value => update({ profile: value as Settings['profile'] }, true)} />
+            </div>
+            <div className="picker-field">
+            <span className="picker-label">Region</span>
+            <SelectPicker
               aria-label="Region"
               value={settings?.region ?? 'auto'}
-              disabled={!settings}
-              onChange={e => update({ region: e.target.value as Settings['region'] }, true)}>
-              <option value="auto">Auto</option>
-              {Object.values(REGIONS).map(r => <option key={r.id} value={r.id}>{r.id.toUpperCase()}</option>)}
-            </select>
+              disabled={!settings || Boolean(busy)}
+              options={[{ value: 'auto', label: 'Auto', description: 'Match this page' }, ...Object.values(REGIONS).map(r => ({ value: r.id, label: r.id.toUpperCase(), description: r.label }))]}
+              onChange={value => update({ region: value as Settings['region'] }, true)} />
+            </div>
           </div>
           {settings?.profile === 'auto' && detectedName && (
             <p className="detected">
@@ -470,14 +402,15 @@ function Popup() {
           )}
 
           {mode === 'ai' && settings && (
+            <Field label="AI instructions" hint="Optional context for this fill">
             <div className="textarea-wrap instructions">
               <textarea
                 rows={2}
                 aria-label="Instructions for AI"
-                placeholder="Optional instructions, e.g. “Senior doctor in Chennai, use @acme.in emails”"
+                placeholder="e.g. A senior doctor in Chennai"
                 value={settings.instructions}
                 onChange={e => setSettings({ ...settings, instructions: e.target.value })}
-                onBlur={e => saveSettings({ instructions: e.target.value })}
+                onBlur={e => update({ instructions: e.target.value })}
               />
               {speech.supported && (
                 <button
@@ -490,60 +423,67 @@ function Popup() {
                 </button>
               )}
             </div>
+            </Field>
+          )}
+
+          {mode === 'ai' && settings && !aiReady && (
+            <div className="setup-notice">
+              <span>Connect an AI provider to use AI fill.</span>
+              <Button variant="ghost" size="sm" onClick={() => openOptions('#ai')}>Set up AI</Button>
+            </div>
           )}
 
           {tab && !tab.restricted && scan && scan.fields.length > 0 && (
             <ScopeBar scope={scope} disabled={disabled} onPick={pickArea} onWholePage={wholePage} onForget={forget} />
           )}
 
-          <button
-            type="button"
-            className={`primary fill-button${busy === 'fill' || busy === 'regenerate' ? ' busy' : ''}`}
+          <Button
+            variant="primary"
+            className={`fill-button${busy === 'fill' || busy === 'regenerate' ? ' busy' : ''}`}
+            aria-busy={busy === 'fill' || busy === 'regenerate'}
             onClick={async () => {
-              if (settings) await saveSettings({ instructions: settings.instructions })
-              fill(false, canContinue)
+              try {
+                if (settings) await saveSettings({ instructions: settings.instructions })
+                await fill(false, canContinue)
+              } catch (error) {
+                showStatus({ tone: 'error', message: `Could not save instructions. ${errorText(error)}` })
+              }
             }}
             title={canContinue ? 'Continue with the values SmartFill filled last time' : undefined}
             disabled={disabled}>
             {busy === 'fill' || busy === 'regenerate'
               ? <span className="spinner" aria-hidden="true" />
               : canContinue ? <MemoryIcon size={17} /> : mode === 'ai' ? <SparklesIcon size={17} /> : <WandIcon size={17} />}
-            {canContinue ? 'Fill same values' : mode === 'ai' ? 'Fill with AI' : 'Fill form'}
-          </button>
+            {busy === 'fill' || busy === 'regenerate' ? 'Filling…' : canContinue ? 'Fill same values' : mode === 'ai' ? 'Fill with AI' : 'Fill form'}
+          </Button>
 
           <div className="secondary-actions">
-            <button type="button" className="link" onClick={() => fill(true)} disabled={disabled}>
+            <Button variant="ghost" size="sm" className="link" onClick={() => fill(true)} disabled={disabled}>
               <RefreshIcon size={13} />
               {canContinue ? (mode === 'ai' ? 'New AI values' : 'New values') : 'Generate again'}
-            </button>
+            </Button>
             <span className="divider" aria-hidden="true" />
-            <button type="button" className="link" onClick={undo} disabled={disabled || !canUndo}>
+            <Button variant="ghost" size="sm" className="link" onClick={undo} disabled={actionDisabled || !canUndo}>
               <UndoIcon size={13} />
               Undo
-            </button>
+            </Button>
           </div>
+
+          {scan && <FieldList fields={scan.fields} scoped={Boolean(scan.scope)} />}
         </section>
-      )}
 
       <Status status={status} action={statusAction} />
 
-      {view === 'fill' && scan && <FieldList fields={scan.fields} scoped={Boolean(scan.scope)} />}
+      {scanning && <div className="scan-state" role="status"><span className="spinner" aria-hidden="true" />Scanning this page…</div>}
+      {scanFailed && <Status status={{ tone: 'warning', message: 'Could not read this page. Refresh the website and try again.' }} action={{ label: 'Retry', onClick: () => rescan() }} />}
 
-      <footer className="footer">
-        <button type="button" className={`ai-status${aiReady ? ' on' : ''}`} onClick={() => openOptions()}>
-          <span className="dot" />
-          <span>
-            {settings && aiReady
-              ? `AI · ${PROVIDERS[settings.provider].name} · ${activeModel(settings)}`
-              : 'AI not set up · Mock works offline'}
-          </span>
-        </button>
-        {shortcut.length > 0 && (
+      {shortcut.length > 0 && (
+        <footer className="footer">
           <span className="shortcut" title="Keyboard shortcut">
             {shortcut.map(key => <kbd key={key}>{key}</kbd>)}
           </span>
-        )}
-      </footer>
+        </footer>
+      )}
     </main>
   )
 }

@@ -21,13 +21,21 @@ export interface SavedForm {
    * Values from the last fill, aligned with `fields`. `null` where
    * nothing was stored: passwords, card numbers and IDs never are.
    */
-  values?: Array<string | boolean | string[] | null>
+  values?: Array<SavedValue | null>
+  /**
+   * Values the user set in Settings, aligned with `fields`. A pinned value
+   * is used on every fill, "New values" included, and a fill never
+   * overwrites it.
+   */
+  pinned?: boolean[]
   /** Seed of the last mock fill, so "same values" also works for new fields. */
   seed?: number
   createdAt: number
   updatedAt: number
   fillCount: number
 }
+
+export type SavedValue = string | boolean | string[]
 
 export interface FormMatch extends MatchResult {
   form: SavedForm
@@ -81,6 +89,41 @@ export async function deleteSavedForm(id: string): Promise<void> {
 
 export async function clearSavedForms(): Promise<void> {
   await chrome.storage.local.remove(STORAGE_KEY)
+}
+
+/** Kinds the editor never stores a value for. */
+const UNEDITABLE_KINDS = new Set(['password', 'file'])
+
+export function isEditableField(sig: FieldSignature): boolean {
+  return !UNEDITABLE_KINDS.has(sig.kind)
+}
+
+export function isPinned(form: SavedForm, index: number): boolean {
+  return form.pinned?.[index] === true
+}
+
+/**
+ * The `values` / `pinned` patch for a value the user typed in Settings.
+ * An empty value clears the slot and unpins it, so the next fill
+ * generates one again.
+ */
+export function editSavedValue(form: SavedForm, index: number, value: SavedValue | null, pin = true): Pick<SavedForm, 'values' | 'pinned'> {
+  const size = form.fields.length
+  const values = Array.from({ length: size }, (_, i) => form.values?.[i] ?? null)
+  const pinned = Array.from({ length: size }, (_, i) => isPinned(form, i))
+  const empty = value === null || value === '' || (Array.isArray(value) && value.length === 0)
+  if (index < 0 || index >= size || !isEditableField(form.fields[index])) return { values, pinned }
+  values[index] = empty ? null : value
+  pinned[index] = !empty && pin
+  return { values, pinned }
+}
+
+/** Pin or unpin a stored value without changing it. Empty slots cannot be pinned. */
+export function setValuePinned(form: SavedForm, index: number, pin: boolean): Pick<SavedForm, 'pinned'> {
+  const pinned = Array.from({ length: form.fields.length }, (_, i) => isPinned(form, i))
+  const value = form.values?.[index]
+  if (index >= 0 && index < pinned.length) pinned[index] = pin && value !== null && value !== undefined
+  return { pinned }
 }
 
 export function newFormId(): string {
