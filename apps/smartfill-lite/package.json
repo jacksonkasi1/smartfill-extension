@@ -1,7 +1,7 @@
 {
   "name": "smartfill-lite",
-  "displayName": "SmartFill – AI Form Filler & Test Data Generator",
-  "version": "1.3.0",
+  "displayName": "SmartFill",
+  "version": "1.3.1",
   "description": "SmartFill: one-click form filler. Autofill any form with realistic test data for 20 industries, or with AI (OpenAI, Claude, Gemini).",
   "scripts": {
     "dev": "node scripts/generate-theme.mjs && plasmo dev",
@@ -15,7 +15,7 @@
   "license": "ISC",
   "type": "module",
   "manifest": {
-    "name": "SmartFill – AI Form Filler & Test Data Generator",
+    "name": "SmartFill",
     "permissions": ["storage", "activeTab", "scripting"],
     "host_permissions": ["http://*/*", "https://*/*"],
     "commands": {

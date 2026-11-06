@@ -12,7 +12,7 @@ permission prompt.
 
 ## Store listing
 
-**Name** (manifest): SmartFill – AI Form Filler & Test Data Generator
+**Name** (manifest): SmartFill
 
 **Summary** (manifest description, ≤132 chars):
 SmartFill: one-click form filler. Autofill any form with realistic test data for 20 industries, or with AI (OpenAI, Claude, Gemini).
